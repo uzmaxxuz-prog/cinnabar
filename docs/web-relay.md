@@ -1,8 +1,9 @@
 # Browser relay
 
-The Go relay keeps Microsoft accounts in memory and joins public RakNet servers
-through the existing core session handler. WebTransport over HTTP/3 is the preferred
-transport. HTTPS WebSocket connections provide control and play fallback channels.
+The Go relay keeps Microsoft accounts in memory and joins public RakNet servers,
+or only one configured game server, through the existing core session handler.
+WebTransport over HTTP/3 is the preferred transport. HTTPS WebSocket connections
+provide control and play fallback channels.
 The relay does not serve the browser page or runtime assets.
 
 Build `core/cmd/bedrock-web-relay` with the core's Go toolchain and run the resulting
@@ -32,10 +33,10 @@ including scheme and any nondefault port. Forwarded address headers are ignored.
 
 Open the configured **UDP** port end to end for HTTP/3, and the configured **TCP**
 port for HTTPS WebSocket fallback. They may use the same port number. Permit
-outbound UDP to public game servers and HTTP/HTTPS for resource packs and Microsoft
-sign-in. An HTTPS reverse proxy must explicitly support WebTransport Extended
-CONNECT and UDP; ordinary HTTP forwarding does not provide that path. Static
-hosting can run separately.
+outbound UDP to public game servers, or only to the configured game endpoint, and
+HTTP/HTTPS for resource packs and Microsoft sign-in. An HTTPS reverse proxy must
+explicitly support WebTransport Extended CONNECT and UDP; ordinary HTTP forwarding
+does not provide that path. Static hosting can run separately.
 
 The shared [bridge contract](../crates/bridge/data/contract.json) owns endpoint
 paths, the WebSocket subprotocol, Hello and control framing, message names, limits,
@@ -67,9 +68,22 @@ Upgraded connections retain their slot until the connection and handlers have en
 Idle accounts expire after ten minutes. Action and upload rate limits, bounded
 control messages, and deadlines apply to both transports. Control message bursts
 are refused; only a pong confirming the current bearer extends the read deadline.
-Public-address checks apply after DNS resolution to every game connection,
-transfer hop, pack URL and
-pack redirect; environment proxies cannot bypass them.
+Public-address checks apply after DNS resolution to every pack URL and pack
+redirect and, without `Config.GameEndpoint`, to every game connection and transfer
+hop; environment proxies cannot bypass them.
+
+A server that embeds the relay for one game server sets `Config.GameEndpoint` to
+that server's IP and port; it may be private. The client then cannot choose the
+game: a Connect must name exactly that IP and port, and the relay dials its own
+configured copy. Every game socket, including redials, transfer hops and the
+Connects of a resumed session, may reach only that endpoint. The relay checks the
+written address before DNS resolution and the socket's address again after it, so
+host names, IPv4-mapped spellings, other ports and other hosts are refused before
+any datagram is sent. A server transfer to another address ends the session with a
+disconnect and is not followed. Pack downloads and their redirects keep the
+public-only policy in every mode and the pack client keeps no cookies. A private
+endpoint is therefore never an HTTP destination; a public endpoint's host can serve
+packs like any other public host. The zero value keeps public-only game egress.
 
 A server that embeds `Relay.Handler` can bind sessions to its own admission with
 `Config.ResolveScope`. It returns each request's `Scope`: an opaque ID, an absolute

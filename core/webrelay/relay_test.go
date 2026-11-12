@@ -355,7 +355,7 @@ func TestWebSocketUsesHelloAndBoundsControlMessages(t *testing.T) {
 }
 
 func TestEgressAndOriginPolicy(t *testing.T) {
-	for _, text := range []string{"10.0.0.1", "127.0.0.1", "169.254.169.254", "100.64.0.1", "::1", "fc00::1", "::ffff:127.0.0.1", "64:ff9b::a00:1"} {
+	for _, text := range []string{"10.0.0.1", "127.0.0.1", "169.254.169.254", "100.64.0.1", "::1", "fc00::1", "::ffff:127.0.0.1", "::ffff:100.64.0.1", "::ffff:198.18.0.1", "64:ff9b::a00:1"} {
 		if publicUpstream(netip.MustParseAddr(text)) {
 			t.Fatal("private address admitted", text)
 		}
@@ -368,14 +368,14 @@ func TestEgressAndOriginPolicy(t *testing.T) {
 	if !publicUpstream(netip.MustParseAddr("8.8.8.8")) {
 		t.Fatal("public address refused")
 	}
-	_, err := newUpstreamDialer(false).DialContext(t.Context(), "udp", "localhost:19132")
+	_, err := newUpstreamDialer(netip.AddrPort{}).DialContext(t.Context(), "udp", "localhost:19132")
 	if !errors.Is(err, errBlockedUpstream) {
 		t.Fatal("resolved loopback bypassed policy", err)
 	}
-	if _, err = selectTarget(t.Context(), control.TargetRealm, "1"); err == nil {
+	if _, err = newUpstreamDialer(netip.AddrPort{}).selectTarget(t.Context(), control.TargetRealm, "1"); err == nil {
 		t.Fatal("non-RakNet target admitted")
 	}
-	if _, err = selectTarget(t.Context(), control.TargetRakNet, "host:0"); err == nil {
+	if _, err = newUpstreamDialer(netip.AddrPort{}).selectTarget(t.Context(), control.TargetRakNet, "host:0"); err == nil {
 		t.Fatal("zero port admitted")
 	}
 	relay := testRelay(t)
