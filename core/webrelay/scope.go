@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// errScope refuses a request or session whose admission scope is missing, revoked or expired.
+// errScope refuses a request whose admission scope is missing, revoked or expired.
 var errScope = errors.New("webrelay: admission scope refused")
 
 // Scope is one server-side admission that an embedding server verified for a relay request.

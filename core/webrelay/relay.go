@@ -137,7 +137,7 @@ func (relay *Relay) openControl(scope Scope, client netip.Addr, token string, no
 	relay.mu.Lock()
 	if relay.ctx.Err() != nil {
 		err = net.ErrClosed
-	} else if _, exists := relay.sessions[session]; !exists || session.ctx.Err() != nil || token != "" && relay.resumeLocked(token, now) != session {
+	} else if _, exists := relay.sessions[session]; !exists || token != "" && relay.resumeLocked(token, now) != session {
 		// The bearer or session may have expired while this controller waited.
 		err = errResume
 	} else if session.client != client && relay.perIP[client] >= maxPerIP {
@@ -192,9 +192,6 @@ func (relay *Relay) controlSession(scope Scope, client netip.Addr, token string,
 	defer relay.mu.Unlock()
 	if relay.ctx.Err() != nil {
 		return nil, net.ErrClosed
-	}
-	if scope.ID != "" && !scope.valid(now) {
-		return nil, errScope
 	}
 	if token != "" {
 		if session := relay.resumeLocked(token, now); session != nil && session.scope == scope.ID {
