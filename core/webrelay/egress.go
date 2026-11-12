@@ -12,6 +12,8 @@ import (
 // errBlockedUpstream marks a dial refused because its resolved destination is not a public host.
 var errBlockedUpstream = errors.New("webrelay: upstream address is not public")
 
+var errOutsideGame = errors.New("webrelay: upstream address is not the game endpoint")
+
 // reservedPrefixes are special-purpose ranges netip's predicates do not cover. NAT64 and 6to4
 // prefixes are refused because they embed, and can route to, any IPv4 address.
 var reservedPrefixes = []netip.Prefix{

@@ -355,7 +355,7 @@ func TestWebSocketUsesHelloAndBoundsControlMessages(t *testing.T) {
 }
 
 func TestEgressAndOriginPolicy(t *testing.T) {
-	for _, text := range []string{"10.0.0.1", "127.0.0.1", "169.254.169.254", "100.64.0.1", "::1", "fc00::1", "::ffff:127.0.0.1", "64:ff9b::a00:1"} {
+	for _, text := range []string{"10.0.0.1", "127.0.0.1", "169.254.169.254", "100.64.0.1", "::1", "fc00::1", "::ffff:127.0.0.1", "::ffff:100.64.0.1", "::ffff:198.18.0.1", "64:ff9b::a00:1"} {
 		if publicUpstream(netip.MustParseAddr(text)) {
 			t.Fatal("private address admitted", text)
 		}

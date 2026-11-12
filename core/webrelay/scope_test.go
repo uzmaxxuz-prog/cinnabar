@@ -38,10 +38,16 @@ type scopeUpstream struct {
 	left    chan *minecraft.Conn
 }
 
-// newScopeUpstream accepts players, sends them a spawn startup and watches them until they leave.
+// newScopeUpstream accepts players on loopback, sends them a spawn startup and watches them until they leave.
 func newScopeUpstream(t *testing.T) *scopeUpstream {
 	t.Helper()
-	listener, err := minecraft.ListenConfig{AuthenticationDisabled: true, ErrorLog: slog.New(slog.DiscardHandler)}.Listen("raknet", "127.0.0.1:0")
+	return newScopeUpstreamAt(t, "127.0.0.1:0")
+}
+
+// newScopeUpstreamAt serves the same upstream on address.
+func newScopeUpstreamAt(t *testing.T, address string) *scopeUpstream {
+	t.Helper()
+	listener, err := minecraft.ListenConfig{AuthenticationDisabled: true, ErrorLog: slog.New(slog.DiscardHandler)}.Listen("raknet", address)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,12 +278,14 @@ func requireControlAnswer(t *testing.T, conn net.Conn) {
 	}
 }
 
-// scopeRelay returns a library relay whose sessions may join a loopback upstream.
-func scopeRelay(t *testing.T, cfg Config) *Relay {
+// scopeRelay returns a library relay whose only game server is upstream; nil configures none.
+func scopeRelay(t *testing.T, cfg Config, upstream *scopeUpstream) *Relay {
 	t.Helper()
 	cfg.Logger = slog.New(slog.DiscardHandler)
+	if upstream != nil {
+		cfg.GameEndpoint = netip.MustParseAddrPort(upstream.address)
+	}
 	relay := New(cfg)
-	relay.dialer = newUpstreamDialer(true)
 	t.Cleanup(relay.Close)
 	return relay
 }
@@ -285,8 +293,8 @@ func scopeRelay(t *testing.T, cfg Config) *Relay {
 // The relay owns its sessions: an embedding server's request context does not end a live game.
 // Middleware that only cancels the request therefore cannot revoke play; scopes do that.
 func TestRequestContextCancellationDoesNotEndRelayGame(t *testing.T) {
-	relay := scopeRelay(t, Config{})
 	upstream := newScopeUpstream(t)
+	relay := scopeRelay(t, Config{}, upstream)
 	host := newScopeHost(t, relay.Handler())
 	controlConn, _ := host.dial(t, bridgecontract.RelayChannelControl, "")
 	welcome := scopeControl(t, controlConn, "")
@@ -392,8 +400,8 @@ func requireClosed(t *testing.T, conn net.Conn, what string) {
 
 func TestScopeRevocationEndsBothChannelsAndUpstream(t *testing.T) {
 	admissions := newScopeAdmissions(t)
-	relay := scopeRelay(t, Config{ResolveScope: admissions.resolve})
 	upstream := newScopeUpstream(t)
+	relay := scopeRelay(t, Config{ResolveScope: admissions.resolve}, upstream)
 	host := newScopeHost(t, relay.Handler())
 	cookie := admissions.grant("A", time.Now().Add(time.Hour))
 	controlConn, _ := host.dial(t, bridgecontract.RelayChannelControl, cookie)
@@ -468,9 +476,9 @@ func requireAlive(t *testing.T, controlConn net.Conn, play *streamnet.FramedConn
 
 func TestScopeIsolatesBrowsersBehindOneAddress(t *testing.T) {
 	admissions := newScopeAdmissions(t)
-	relay := scopeRelay(t, Config{ResolveScope: admissions.resolve})
-	unlimitedActions(relay)
 	upstream := newScopeUpstream(t)
+	relay := scopeRelay(t, Config{ResolveScope: admissions.resolve}, upstream)
+	unlimitedActions(relay)
 	host := newScopeHost(t, relay.Handler())
 	cookieA := admissions.grant("A", time.Now().Add(time.Hour))
 	cookieB := admissions.grant("B", time.Now().Add(time.Hour))
@@ -504,7 +512,7 @@ func TestScopeIsolatesBrowsersBehindOneAddress(t *testing.T) {
 
 func TestScopeBearerWithoutAdmissionIsRefusedBeforeUpgrade(t *testing.T) {
 	admissions := newScopeAdmissions(t)
-	relay := scopeRelay(t, Config{ResolveScope: admissions.resolve})
+	relay := scopeRelay(t, Config{ResolveScope: admissions.resolve}, nil)
 	host := newScopeHost(t, relay.Handler())
 	cookie := admissions.grant("A", time.Now().Add(time.Hour))
 	expired := admissions.grant("expired", time.Now().Add(-time.Second))
@@ -529,9 +537,9 @@ func TestScopeBearerWithoutAdmissionIsRefusedBeforeUpgrade(t *testing.T) {
 
 func TestScopeRevocationRefusesItsBearersAndRevivesNothing(t *testing.T) {
 	admissions := newScopeAdmissions(t)
-	relay := scopeRelay(t, Config{ResolveScope: admissions.resolve})
-	unlimitedActions(relay)
 	upstream := newScopeUpstream(t)
+	relay := scopeRelay(t, Config{ResolveScope: admissions.resolve}, upstream)
+	unlimitedActions(relay)
 	host := newScopeHost(t, relay.Handler())
 	cookieA := admissions.grant("A", time.Now().Add(time.Hour))
 	controlConn, _ := host.dial(t, bridgecontract.RelayChannelControl, cookieA)
@@ -571,9 +579,9 @@ func TestScopeRevocationRefusesItsBearersAndRevivesNothing(t *testing.T) {
 
 func TestFreshControlInScopeClosesPreviousSession(t *testing.T) {
 	admissions := newScopeAdmissions(t)
-	relay := scopeRelay(t, Config{ResolveScope: admissions.resolve})
-	unlimitedActions(relay)
 	upstream := newScopeUpstream(t)
+	relay := scopeRelay(t, Config{ResolveScope: admissions.resolve}, upstream)
+	unlimitedActions(relay)
 	host := newScopeHost(t, relay.Handler())
 	cookie := admissions.grant("A", time.Now().Add(time.Hour))
 	oldControl, _ := host.dial(t, bridgecontract.RelayChannelControl, cookie)
@@ -605,9 +613,9 @@ func TestFreshControlInScopeClosesPreviousSession(t *testing.T) {
 
 func TestNetworkBreakResumesWithinScope(t *testing.T) {
 	admissions := newScopeAdmissions(t)
-	relay := scopeRelay(t, Config{ResolveScope: admissions.resolve})
-	unlimitedActions(relay)
 	upstream := newScopeUpstream(t)
+	relay := scopeRelay(t, Config{ResolveScope: admissions.resolve}, upstream)
+	unlimitedActions(relay)
 	host := newScopeHost(t, relay.Handler())
 	cookie := admissions.grant("A", time.Now().Add(time.Hour))
 	oldControl, _ := host.dial(t, bridgecontract.RelayChannelControl, cookie)
@@ -726,7 +734,7 @@ func TestExpiredResumeNeedsFreshControlThatRetiresPrevious(t *testing.T) {
 
 func TestScopeRefusesWebTransportWithoutAdmission(t *testing.T) {
 	admissions := newScopeAdmissions(t)
-	relay := scopeRelay(t, Config{ResolveScope: admissions.resolve})
+	relay := scopeRelay(t, Config{ResolveScope: admissions.resolve}, nil)
 	certificateServer := httptest.NewTLSServer(http.NotFoundHandler())
 	certificate := certificateServer.TLS.Certificates[0]
 	certificateServer.Close()
@@ -763,7 +771,7 @@ func TestScopeDeadlinePassedDuringResolutionIsRefused(t *testing.T) {
 		<-time.After(time.Until(deadline) + time.Millisecond)
 		return Scope{ID: "A", Deadline: deadline, Revoked: revoked}, nil
 	}
-	relay := scopeRelay(t, Config{ResolveScope: slow})
+	relay := scopeRelay(t, Config{ResolveScope: slow}, nil)
 	host := newScopeHost(t, relay.Handler())
 	if conn, status := host.dial(t, bridgecontract.RelayChannelControl, ""); conn != nil || status != http.StatusForbidden {
 		t.Fatalf("an admission that expired while it was resolved upgraded with status %d", status)
