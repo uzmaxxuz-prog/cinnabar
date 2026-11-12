@@ -7,8 +7,9 @@
 # then starts the game fixture at 172.30.240.3 and the relay at 172.30.240.2 on an --internal
 # Docker network 172.30.240.0/29 with no published ports. It refuses to start when its network
 # name exists or another network or route already uses 172.30.240.0/29. On every exit, including
-# SIGINT, SIGTERM and SIGHUP, it removes the containers and network this run created, by ID, and
-# nothing else. The test binary and Go caches stay in <work-dir>.
+# SIGINT, SIGTERM and SIGHUP, it removes the containers and network this run created and nothing
+# else: each carries a label with this run's random token. The test binary and Go caches stay in
+# <work-dir>.
 #
 # Environment:
 #   EGRESS_PREFIX     container and network name prefix (default webrelay-egress-<pid>)
@@ -32,27 +33,28 @@ subnet=172.30.240.0/29
 game=172.30.240.3:19132
 user=$(id -u):$(id -g)
 
-# Only resources this run created are recorded, and only recorded ones are removed.
-containers=""
-network=""
+# Every container and network this run creates carries its token, so cleanup removes exactly
+# those, even one whose create was interrupted before the script saw its ID.
+token=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
+label=webrelay-egress-run=$token
 cleanup() {
 	trap '' INT TERM HUP
-	for id in $containers; do
+	for id in $(docker ps -aq --filter "label=$label"); do
 		docker rm -f "$id" >/dev/null 2>&1 || true
 	done
-	if [ -n "$network" ]; then
-		docker network rm "$network" >/dev/null 2>&1 || true
-	fi
+	for id in $(docker network ls -q --filter "label=$label"); do
+		docker network rm "$id" >/dev/null 2>&1 || true
+	done
 }
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 trap 'exit 129' HUP
 
-# create records a new container's ID; a name that already exists fails without being recorded.
+# create makes a container labelled with this run's token; a name that already exists fails and
+# leaves the other container untouched.
 create() {
-	id=$(docker create "$@")
-	containers="$containers $id"
+	id=$(docker create --label "$label" "$@")
 }
 
 # attach streams a created container until it exits and returns its status. It waits in the
@@ -85,7 +87,7 @@ create --name "$prefix-build" --user "$user" \
 build=$id
 attach "$build"
 
-network=$(docker network create --internal --subnet "$subnet" "$prefix-net")
+network=$(docker network create --label "$label" --internal --subnet "$subnet" "$prefix-net")
 create --name "$prefix-game" --network "$network" --ip 172.30.240.3 --user "$user" \
 	-e HOME=/tmp -e WEBRELAY_EGRESS_ROLE=game -e WEBRELAY_EGRESS_GAME="$game" \
 	-v "$work":/suite:ro -w /tmp "$image" \
