@@ -18,7 +18,7 @@ func TestResumeSupersedesControllerBeforeDetach(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		relay := testRelay(t)
 		client := netip.MustParseAddr("192.0.2.1")
-		controller, oldDetach, err := relay.openControl(client, "", time.Now(), testBrowserUserAgent, false)
+		controller, oldDetach, err := relay.openControl(Scope{}, client, "", time.Now(), testBrowserUserAgent, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -31,7 +31,7 @@ func TestResumeSupersedesControllerBeforeDetach(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer controller.session.endPlay()
-		resumed, detach, err := relay.openControl(client, token, time.Now(), testBrowserUserAgent, false)
+		resumed, detach, err := relay.openControl(Scope{}, client, token, time.Now(), testBrowserUserAgent, false)
 		if err != nil {
 			t.Fatal("valid resume refused before the old controller detached", err)
 		}
@@ -52,7 +52,7 @@ func TestResumeSupersedesControllerBeforeDetach(t *testing.T) {
 		if err := relay.applyAccount(controller, client, bridgecontract.RelayOpSignOut, time.Now()); !errors.Is(err, net.ErrClosed) {
 			t.Fatal("retired controller changed the account", err)
 		}
-		if _, _, err := relay.playSession(controller, hello{Generation: resumed.generation}, time.Now()); !errors.Is(err, errResume) {
+		if _, _, err := relay.playSession(Scope{}, controller, hello{Generation: resumed.generation}, time.Now()); !errors.Is(err, errResume) {
 			t.Fatal("retired transport claimed the replacement play generation", err)
 		}
 		oldDetach(time.Now())
@@ -60,7 +60,7 @@ func TestResumeSupersedesControllerBeforeDetach(t *testing.T) {
 		if newControl.Err() != nil {
 			t.Fatal("late old detach cancelled the replacement controller")
 		}
-		if _, _, err := relay.playSession(nil, hello{Resume: token, Generation: oldGeneration}, time.Now()); !errors.Is(err, errResume) {
+		if _, _, err := relay.playSession(Scope{}, nil, hello{Resume: token, Generation: oldGeneration}, time.Now()); !errors.Is(err, errResume) {
 			t.Fatal("old play generation survived takeover", err)
 		}
 		done := make(chan error, 1)
@@ -87,7 +87,7 @@ func TestResumedPlayWaitsForCancelledHandler(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				relay := testRelay(t)
 				client := netip.MustParseAddr("192.0.2.1")
-				controller, detach, err := relay.openControl(client, "", time.Now(), testBrowserUserAgent, false)
+				controller, detach, err := relay.openControl(Scope{}, client, "", time.Now(), testBrowserUserAgent, false)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -100,7 +100,7 @@ func TestResumedPlayWaitsForCancelledHandler(t *testing.T) {
 				if !errors.Is(oldControl.Err(), context.Canceled) {
 					t.Fatal("old play controller was not cancelled")
 				}
-				resumed, detach, err := relay.openControl(client, token, time.Now(), testBrowserUserAgent, false)
+				resumed, detach, err := relay.openControl(Scope{}, client, token, time.Now(), testBrowserUserAgent, false)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -110,7 +110,7 @@ func TestResumedPlayWaitsForCancelledHandler(t *testing.T) {
 				if boundTransport {
 					bound = resumed
 				}
-				selected, controlCtx, err := relay.playSession(bound, hello{Resume: welcome.Resume, Generation: welcome.Generation}, time.Now())
+				selected, controlCtx, err := relay.playSession(Scope{}, bound, hello{Resume: welcome.Resume, Generation: welcome.Generation}, time.Now())
 				if err != nil || selected != controller.session {
 					t.Fatal("fresh play generation was refused", err)
 				}
@@ -147,7 +147,7 @@ func TestReplacementPlayWaitStopsOnCancellation(t *testing.T) {
 				synctest.Test(t, func(t *testing.T) {
 					relay := testRelay(t)
 					client := netip.MustParseAddr("192.0.2.1")
-					controller, detach, err := relay.openControl(client, "", time.Now(), testBrowserUserAgent, false)
+					controller, detach, err := relay.openControl(Scope{}, client, "", time.Now(), testBrowserUserAgent, false)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -161,7 +161,7 @@ func TestReplacementPlayWaitStopsOnCancellation(t *testing.T) {
 					defer controller.session.endPlay()
 					if !sameController {
 						detach(time.Now())
-						controller, detach, err = relay.openControl(client, token, time.Now(), testBrowserUserAgent, false)
+						controller, detach, err = relay.openControl(Scope{}, client, token, time.Now(), testBrowserUserAgent, false)
 						if err != nil {
 							t.Fatal(err)
 						}
@@ -201,13 +201,13 @@ func TestReplacementPlayWaitStopsOnCancellation(t *testing.T) {
 func TestCancelledControllerCannotClaimResumedPlay(t *testing.T) {
 	relay := testRelay(t)
 	client := netip.MustParseAddr("192.0.2.1")
-	controller, detach, err := relay.openControl(client, "", time.Now(), testBrowserUserAgent, false)
+	controller, detach, err := relay.openControl(Scope{}, client, "", time.Now(), testBrowserUserAgent, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	token, oldControl := controller.session.token, controller.ctx
 	detach(time.Now())
-	resumed, detach, err := relay.openControl(client, token, time.Now(), testBrowserUserAgent, false)
+	resumed, detach, err := relay.openControl(Scope{}, client, token, time.Now(), testBrowserUserAgent, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +224,7 @@ func TestCancelledControllerCannotClaimResumedPlay(t *testing.T) {
 func TestSequentialPlayWaitsForSameControllerTeardown(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		relay := testRelay(t)
-		controller, detach, err := relay.openControl(netip.MustParseAddr("192.0.2.1"), "", time.Now(), testBrowserUserAgent, false)
+		controller, detach, err := relay.openControl(Scope{}, netip.MustParseAddr("192.0.2.1"), "", time.Now(), testBrowserUserAgent, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -257,7 +257,7 @@ func TestSequentialPlayWaitsForSameControllerTeardown(t *testing.T) {
 				}
 				read <- err
 			}()
-			relay.runPlay(t.Context(), conn, controller.session.client, controller, hello{Generation: controller.generation, Join: 2})
+			relay.runPlay(t.Context(), conn, controller.session.client, Scope{}, controller, hello{Generation: controller.generation, Join: 2})
 			done <- <-read
 		}()
 		synctest.Wait()

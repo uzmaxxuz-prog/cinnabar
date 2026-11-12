@@ -36,6 +36,10 @@ var (
 type Config struct {
 	AllowedOrigins []string
 	Logger         *slog.Logger
+	// ResolveScope, when set, returns the admission of each control and play request before
+	// Upgrade. An error refuses the request, and every session lives no longer than its scope.
+	// Nil serves sessions bound only to the relay.
+	ResolveScope func(*http.Request) (Scope, error)
 }
 
 // Relay owns bounded in-memory accounts and transport connections. Close erases the accounts.
@@ -48,6 +52,7 @@ type Relay struct {
 	conns       sync.WaitGroup
 	mu          sync.Mutex
 	sessions    map[*webSession]struct{}
+	scopes      map[string]*webSession // the one session each admission scope may retain
 	tokens      map[string]resumeBearer
 	perIP       map[netip.Addr]int
 	connections map[netip.Addr]int
@@ -68,7 +73,7 @@ func New(cfg Config) *Relay {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Relay{cfg: cfg, logger: cfg.Logger, dialer: newUpstreamDialer(false), ctx: ctx, cancel: cancel,
-		sessions: make(map[*webSession]struct{}), tokens: make(map[string]resumeBearer), perIP: make(map[netip.Addr]int),
+		sessions: make(map[*webSession]struct{}), scopes: make(map[string]*webSession), tokens: make(map[string]resumeBearer), perIP: make(map[netip.Addr]int),
 		connections: make(map[netip.Addr]int), limiters: make(map[netip.Addr]*clientLimiter)}
 }
 
@@ -115,10 +120,10 @@ func (relay *Relay) allow(client netip.Addr) bool {
 	return relay.allowLocked(client, time.Now())
 }
 
-// openControl creates or resumes an account and replaces its previous controller.
+// openControl creates or resumes an account in scope and replaces its previous controller.
 // A valid bearer retires the old controller before the new generation becomes available.
-func (relay *Relay) openControl(client netip.Addr, token string, now time.Time, userAgent string, appleMobile bool) (*sessionController, func(time.Time), error) {
-	session, err := relay.controlSession(client, token, now, userAgent, appleMobile)
+func (relay *Relay) openControl(scope Scope, client netip.Addr, token string, now time.Time, userAgent string, appleMobile bool) (*sessionController, func(time.Time), error) {
+	session, err := relay.controlSession(scope, client, token, now, userAgent, appleMobile)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -155,7 +160,7 @@ func (relay *Relay) openControl(client netip.Addr, token string, now time.Time, 
 		session.controller.cancel()
 	}
 	session.generation++
-	ctx, cancel := context.WithCancel(relay.ctx)
+	ctx, cancel := context.WithCancel(session.ctx)
 	controller := &sessionController{session: session, ctx: ctx, cancel: cancel, generation: session.generation}
 	session.controller = controller
 	relay.rotateLocked(session, token, now)
@@ -180,28 +185,62 @@ func (relay *Relay) openControl(client netip.Addr, token string, now time.Time, 
 }
 
 // controlSession finds or creates an account without waiting for existing session work.
-func (relay *Relay) controlSession(client netip.Addr, token string, now time.Time, userAgent string, appleMobile bool) (*webSession, error) {
+// A bearer resumes only the session of its own scope. A fresh control of a scope first retires
+// that scope's previous session, so its bearers and quota are gone before the replacement exists.
+func (relay *Relay) controlSession(scope Scope, client netip.Addr, token string, now time.Time, userAgent string, appleMobile bool) (*webSession, error) {
 	relay.mu.Lock()
 	defer relay.mu.Unlock()
 	if relay.ctx.Err() != nil {
 		return nil, net.ErrClosed
 	}
 	if token != "" {
-		if session := relay.resumeLocked(token, now); session != nil {
+		if session := relay.resumeLocked(token, now); session != nil && session.scope == scope.ID {
 			return session, nil
 		}
 		return nil, errResume
 	}
+	if previous := relay.scopes[scope.ID]; scope.ID != "" && previous != nil {
+		relay.forgetLocked(previous)
+	}
 	if len(relay.sessions) >= maxSessions || relay.perIP[client] >= maxPerIP {
 		return nil, errAdmission
 	}
-	session, err := newWebSession(relay, client, now, userAgent, appleMobile)
+	session, err := newWebSession(relay, scope, client, now, userAgent, appleMobile)
 	if err != nil {
 		return nil, err
 	}
 	relay.sessions[session] = struct{}{}
 	relay.perIP[client]++
+	if scope.ID != "" {
+		relay.scopes[scope.ID] = session
+		context.AfterFunc(session.ctx, func() { relay.retire(session) })
+	}
 	return session, nil
+}
+
+// forgetLocked removes session's bearers, scope entry and quota and ends its context while
+// Relay.mu is held. Once the relay closes, Close owns every remaining session instead.
+// The caller closes a forgotten unscoped session; the scope watcher closes a scoped one,
+// and Close waits for that pending close.
+func (relay *Relay) forgetLocked(session *webSession) {
+	if _, exists := relay.sessions[session]; !exists || relay.ctx.Err() != nil {
+		return
+	}
+	if session.scope != "" {
+		relay.conns.Add(1)
+		session.retiring = true
+	}
+	delete(relay.sessions, session)
+	delete(relay.tokens, session.token)
+	delete(relay.tokens, session.previousToken)
+	if relay.scopes[session.scope] == session {
+		delete(relay.scopes, session.scope)
+	}
+	relay.perIP[session.client]--
+	if relay.perIP[session.client] == 0 {
+		delete(relay.perIP, session.client)
+	}
+	session.cancel()
 }
 
 // welcome refreshes current capabilities; a retired controller gets no capability to publish.
@@ -221,7 +260,8 @@ func (relay *Relay) welcome(controller *sessionController, refresh bool, now tim
 }
 
 // playSession checks a fallback bearer or the authenticated QUIC account and its generation.
-func (relay *Relay) playSession(bound *sessionController, hello hello, now time.Time) (*webSession, context.Context, error) {
+// Play joins only a session of the request's own scope.
+func (relay *Relay) playSession(scope Scope, bound *sessionController, hello hello, now time.Time) (*webSession, context.Context, error) {
 	relay.mu.Lock()
 	defer relay.mu.Unlock()
 	var session *webSession
@@ -237,7 +277,7 @@ func (relay *Relay) playSession(bound *sessionController, hello hello, now time.
 		}
 	}
 	controller := session.controller
-	if controller == nil || controller.ctx.Err() != nil || hello.Generation != controller.generation {
+	if session.scope != scope.ID || controller == nil || controller.ctx.Err() != nil || hello.Generation != controller.generation {
 		return nil, nil, errResume
 	}
 	return session, controller.ctx, nil
@@ -262,13 +302,7 @@ func (relay *Relay) expire(now time.Time) {
 		relay.mu.Lock()
 		_, exists := relay.sessions[session]
 		if expired && exists {
-			delete(relay.sessions, session)
-			delete(relay.tokens, session.token)
-			delete(relay.tokens, session.previousToken)
-			relay.perIP[session.client]--
-			if relay.perIP[session.client] == 0 {
-				delete(relay.perIP, session.client)
-			}
+			relay.forgetLocked(session)
 		}
 		relay.mu.Unlock()
 		session.commands.Unlock()
@@ -303,6 +337,7 @@ func (relay *Relay) Close() {
 	relay.mu.Lock()
 	sessions := relay.sessions
 	relay.sessions = make(map[*webSession]struct{})
+	relay.scopes = make(map[string]*webSession)
 	relay.tokens = make(map[string]resumeBearer)
 	relay.mu.Unlock()
 	for session := range sessions {

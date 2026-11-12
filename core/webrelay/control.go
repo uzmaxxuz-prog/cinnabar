@@ -240,10 +240,10 @@ func (relay *Relay) applyAccount(controller *sessionController, client netip.Add
 	return session.SignOut()
 }
 
-// runPlay claims one generation and preserves the core's reliable bridge byte stream.
-func (relay *Relay) runPlay(ctx context.Context, conn net.Conn, client netip.Addr, bound *sessionController, request hello) {
+// runPlay claims one generation of a session in scope and preserves the core's reliable bridge byte stream.
+func (relay *Relay) runPlay(ctx context.Context, conn net.Conn, client netip.Addr, scope Scope, bound *sessionController, request hello) {
 	defer conn.Close()
-	session, controlCtx, err := relay.playSession(bound, request, time.Now())
+	session, controlCtx, err := relay.playSession(scope, bound, request, time.Now())
 	if err != nil || !relay.allow(client) {
 		return
 	}
