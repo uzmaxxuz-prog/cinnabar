@@ -753,3 +753,59 @@ func TestScopeRefusesWebTransportWithoutAdmission(t *testing.T) {
 		t.Fatal("WebTransport without an admission was not refused before Upgrade", err)
 	}
 }
+
+func TestScopeDeadlinePassedDuringResolutionIsRefused(t *testing.T) {
+	revoked, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// The resolver answers only after the admission it returns has expired.
+	slow := func(*http.Request) (Scope, error) {
+		deadline := time.Now().Add(20 * time.Millisecond)
+		<-time.After(time.Until(deadline) + time.Millisecond)
+		return Scope{ID: "A", Deadline: deadline, Revoked: revoked}, nil
+	}
+	relay := scopeRelay(t, Config{ResolveScope: slow})
+	host := newScopeHost(t, relay.Handler())
+	if conn, status := host.dial(t, bridgecontract.RelayChannelControl, ""); conn != nil || status != http.StatusForbidden {
+		t.Fatalf("an admission that expired while it was resolved upgraded with status %d", status)
+	}
+}
+
+func TestCloseWaitsForAReplacedScopedSession(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		relay := New(Config{Logger: slog.New(slog.DiscardHandler)})
+		scope, _ := testScope(t, "A", time.Now().Add(time.Hour))
+		previous, detach, err := relay.openControl(scope, netip.MustParseAddr("192.0.2.1"), "", time.Now(), testBrowserUserAgent, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { detach(time.Now()) }()
+		session := previous.session
+		if _, err := session.beginPlay(t.Context(), previous.ctx, 0); err != nil {
+			t.Fatal(err)
+		}
+		// A fresh control forgets the session; Close begins before the scope watcher runs.
+		relay.mu.Lock()
+		relay.forgetLocked(session)
+		relay.cancel()
+		relay.mu.Unlock()
+		closed := make(chan struct{})
+		go func() { relay.Close(); close(closed) }()
+		synctest.Wait()
+		select {
+		case <-closed:
+			t.Fatal("Close returned while the replaced session was still playing")
+		default:
+		}
+		session.endPlay()
+		select {
+		case <-closed:
+		case <-time.After(time.Minute):
+			t.Fatal("Close never returned after the replaced session's play ended")
+		}
+		session.mu.Lock()
+		defer session.mu.Unlock()
+		if !session.closed {
+			t.Fatal("the replaced session's account and handler were never closed")
+		}
+	})
+}
