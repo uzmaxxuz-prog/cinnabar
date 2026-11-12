@@ -64,12 +64,14 @@ type egressRecorder struct {
 	events []egressEvent
 }
 
+// add records event after every earlier one.
 func (recorder *egressRecorder) add(event egressEvent) {
 	recorder.mu.Lock()
 	recorder.events = append(recorder.events, event)
 	recorder.mu.Unlock()
 }
 
+// snapshot returns a copy of the events recorded so far.
 func (recorder *egressRecorder) snapshot() []egressEvent {
 	recorder.mu.Lock()
 	defer recorder.mu.Unlock()

@@ -227,8 +227,8 @@ func (browser *gameBrowser) requireJoined(t *testing.T, target string) (*streamn
 	return play, conn
 }
 
-// The library's default policy admits public game servers only, so a private game such as the
-// stage's own server is refused before any datagram leaves the relay.
+// The library's default policy admits public game servers only, so a private game server is
+// refused before any datagram leaves the relay.
 func TestDefaultEgressRefusesPrivateGame(t *testing.T) {
 	game := newEgressProbe(t, "127.0.0.1:0")
 	relay, host := gameRelay(t, netip.AddrPort{})
