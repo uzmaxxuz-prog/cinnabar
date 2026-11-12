@@ -247,7 +247,7 @@ func (fixture *egressFixture) requireSilent(t *testing.T) {
 	}
 }
 
-// TestNetworkEgress drives the relay against the game fixture with the stage's real addresses.
+// TestNetworkEgress drives the relay against the game fixture with real private addresses.
 func TestNetworkEgress(t *testing.T) {
 	game := egressNetwork(t, "relay")
 	name := os.Getenv(egressGameNameEnv)
