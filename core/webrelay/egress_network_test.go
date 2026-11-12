@@ -25,7 +25,9 @@ import (
 // The network egress suite runs this package's test binary in two containers on one internal
 // network: the game fixture at the configured game endpoint and the relay beside it. It proves the
 // policy with real private addresses, a real resolver name for the game and listeners the relay
-// must not reach. Outside that network the suite skips.
+// must not reach. Outside that network the suite skips; run it with
+// core/webrelay/testdata/egress-suite.sh <work-dir>, which builds the binary, creates the network
+// and removes its containers and network afterwards.
 const (
 	egressRoleEnv     = "WEBRELAY_EGRESS_ROLE"      // "game" or "relay"
 	egressGameEnv     = "WEBRELAY_EGRESS_GAME"      // the game endpoint, an IP and port
