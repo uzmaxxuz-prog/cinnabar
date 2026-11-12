@@ -219,10 +219,16 @@ func (relay *Relay) controlSession(scope Scope, client netip.Addr, token string,
 }
 
 // forgetLocked removes session's bearers, scope entry and quota and ends its context while
-// Relay.mu is held. The caller or the session's scope watcher closes the session afterwards.
+// Relay.mu is held. Once the relay closes, Close owns every remaining session instead.
+// The caller closes a forgotten unscoped session; the scope watcher closes a scoped one,
+// and Close waits for that pending close.
 func (relay *Relay) forgetLocked(session *webSession) {
-	if _, exists := relay.sessions[session]; !exists {
+	if _, exists := relay.sessions[session]; !exists || relay.ctx.Err() != nil {
 		return
+	}
+	if session.scope != "" {
+		relay.conns.Add(1)
+		session.retiring = true
 	}
 	delete(relay.sessions, session)
 	delete(relay.tokens, session.token)

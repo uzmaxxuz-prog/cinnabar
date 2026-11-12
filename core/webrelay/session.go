@@ -50,6 +50,8 @@ type webSession struct {
 	commands      sync.Mutex
 	// scope is the admission ID the session was created in; empty without a scope resolver.
 	scope string
+	// retiring marks a forgotten scoped session whose close the scope watcher still owes.
+	retiring bool
 	// ctx ends with the relay or the session's scope; every controller derives from it.
 	ctx    context.Context
 	cancel context.CancelFunc

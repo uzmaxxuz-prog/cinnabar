@@ -56,17 +56,18 @@ func scopeContext(parent context.Context, scope Scope) (context.Context, context
 }
 
 // retire closes a scoped session once its scope ends or a fresh control replaced it: its bearers
-// and quota go first, then its channels and upstream end with the session context.
+// and quota go first, then its channels and upstream end with the session context. A session
+// that Close still holds is left to Close; a forgotten one is closed here, even while the relay
+// closes, and Close waits for it.
 func (relay *Relay) retire(session *webSession) {
 	relay.mu.Lock()
-	if relay.ctx.Err() != nil {
-		// Close cancels every session and erases it after the transports end.
-		relay.mu.Unlock()
+	relay.forgetLocked(session)
+	owned := session.retiring
+	session.retiring = false
+	relay.mu.Unlock()
+	if !owned {
 		return
 	}
-	relay.forgetLocked(session)
-	relay.conns.Add(1)
-	relay.mu.Unlock()
 	defer relay.conns.Done()
 	session.awaitPlay()
 	session.close()
