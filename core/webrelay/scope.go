@@ -30,12 +30,13 @@ func (scope Scope) valid(now time.Time) bool {
 
 // requestScope returns the request's admission. Without a resolver every request is unscoped.
 // A resolver error or a scope that is not in force refuses the request before Upgrade.
-func (relay *Relay) requestScope(r *http.Request, now time.Time) (Scope, error) {
+// The deadline is checked when the resolver has answered, however long it took.
+func (relay *Relay) requestScope(r *http.Request) (Scope, error) {
 	if relay.cfg.ResolveScope == nil {
 		return Scope{}, nil
 	}
 	scope, err := relay.cfg.ResolveScope(r)
-	if err != nil || !scope.valid(now) {
+	if err != nil || !scope.valid(time.Now()) {
 		return Scope{}, errScope
 	}
 	return scope, nil

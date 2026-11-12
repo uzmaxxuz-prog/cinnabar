@@ -115,7 +115,7 @@ func (relay *Relay) serveSocket(w http.ResponseWriter, r *http.Request, channel 
 		http.Error(w, "origin refused", http.StatusForbidden)
 		return
 	}
-	scope, err := relay.requestScope(r, time.Now())
+	scope, err := relay.requestScope(r)
 	if err != nil {
 		http.Error(w, "admission refused", http.StatusForbidden)
 		return
@@ -200,7 +200,7 @@ func (conn *socketConn) Write(data []byte) (int, error) {
 
 // serveTransport binds one control and at most one play stream to an authenticated QUIC session.
 func (relay *Relay) serveTransport(w http.ResponseWriter, r *http.Request, server *webtransport.Server) {
-	scope, err := relay.requestScope(r, time.Now())
+	scope, err := relay.requestScope(r)
 	if err != nil {
 		http.Error(w, "admission refused", http.StatusForbidden)
 		return
