@@ -96,7 +96,10 @@ func (relay *Relay) socketServer(tlsConfig *tls.Config, address string) *http.Se
 		ConnContext: relay.tcpConnContext, ConnState: relay.tcpConnState}
 }
 
-// Handler exposes only the two WebSocket fallback channels.
+// Handler exposes only the two WebSocket fallback channels. With Config.ResolveScope, each request
+// carries its admission scope: control and play join only sessions of that scope, and the scope's
+// revocation or deadline ends both channels, the retained session and its upstream connection.
+// The request context never ends a session.
 func (relay *Relay) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+bridgecontract.RelayControlPath, func(w http.ResponseWriter, r *http.Request) {
@@ -110,6 +113,11 @@ func (relay *Relay) Handler() http.Handler {
 func (relay *Relay) serveSocket(w http.ResponseWriter, r *http.Request, channel string) {
 	if !relay.checkOrigin(r) {
 		http.Error(w, "origin refused", http.StatusForbidden)
+		return
+	}
+	scope, err := relay.requestScope(r, time.Now())
+	if err != nil {
+		http.Error(w, "admission refused", http.StatusForbidden)
 		return
 	}
 	client := clientAddr(r)
@@ -127,7 +135,7 @@ func (relay *Relay) serveSocket(w http.ResponseWriter, r *http.Request, channel 
 	if socket.Subprotocol() != bridgecontract.RelaySocketProtocol {
 		return
 	}
-	ctx, cancel := context.WithCancel(relay.ctx)
+	ctx, cancel := scopeContext(relay.ctx, scope)
 	defer cancel()
 	stop := context.AfterFunc(ctx, func() { _ = socket.CloseNow() })
 	defer stop()
@@ -141,10 +149,10 @@ func (relay *Relay) serveSocket(w http.ResponseWriter, r *http.Request, channel 
 		return
 	}
 	if channel == bridgecontract.RelayChannelPlay {
-		relay.runPlay(ctx, conn, client, nil, request)
+		relay.runPlay(ctx, conn, client, scope, nil, request)
 		return
 	}
-	controller, detach, err := relay.openControl(client, request.Resume, time.Now(), request.browserUserAgent(r.UserAgent()), request.AppleMobile)
+	controller, detach, err := relay.openControl(scope, client, request.Resume, time.Now(), request.browserUserAgent(r.UserAgent()), request.AppleMobile)
 	if err != nil {
 		_ = writeJSON(ctx, conn, controlEvent{Type: bridgecontract.RelayEventError, Error: refusal(err)})
 		return
@@ -192,6 +200,11 @@ func (conn *socketConn) Write(data []byte) (int, error) {
 
 // serveTransport binds one control and at most one play stream to an authenticated QUIC session.
 func (relay *Relay) serveTransport(w http.ResponseWriter, r *http.Request, server *webtransport.Server) {
+	scope, err := relay.requestScope(r, time.Now())
+	if err != nil {
+		http.Error(w, "admission refused", http.StatusForbidden)
+		return
+	}
 	client := clientAddr(r)
 	admission, release, err := relay.admitTransport(r)
 	if err != nil {
@@ -205,7 +218,7 @@ func (relay *Relay) serveTransport(w http.ResponseWriter, r *http.Request, serve
 		return
 	}
 	defer transport.CloseWithError(0, "")
-	ctx, cancel := context.WithCancel(relay.ctx)
+	ctx, cancel := scopeContext(relay.ctx, scope)
 	defer cancel()
 	stop := context.AfterFunc(transport.Context(), cancel)
 	defer stop()
@@ -222,7 +235,7 @@ func (relay *Relay) serveTransport(w http.ResponseWriter, r *http.Request, serve
 	if err != nil {
 		return
 	}
-	controller, detach, err := relay.openControl(client, request.Resume, time.Now(), request.browserUserAgent(r.UserAgent()), request.AppleMobile)
+	controller, detach, err := relay.openControl(scope, client, request.Resume, time.Now(), request.browserUserAgent(r.UserAgent()), request.AppleMobile)
 	if err != nil {
 		_ = writeJSON(ctx, controlConn, controlEvent{Type: bridgecontract.RelayEventError, Error: refusal(err)})
 		return
@@ -258,7 +271,7 @@ func (relay *Relay) serveTransport(w http.ResponseWriter, r *http.Request, serve
 			continue
 		}
 		// Leave replacement streams in QUIC's bounded accept queue until teardown completes.
-		relay.runPlay(ctx, conn, client, controller, request)
+		relay.runPlay(ctx, conn, client, scope, controller, request)
 	}
 }
 

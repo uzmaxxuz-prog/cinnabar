@@ -48,6 +48,11 @@ type webSession struct {
 	client        netip.Addr
 	relay         *Relay
 	commands      sync.Mutex
+	// scope is the admission ID the session was created in; empty without a scope resolver.
+	scope string
+	// ctx ends with the relay or the session's scope; every controller derives from it.
+	ctx    context.Context
+	cancel context.CancelFunc
 
 	mu           sync.Mutex
 	auth         control.AuthV1
@@ -78,12 +83,16 @@ type sessionController struct {
 	generation uint64
 }
 
-// newWebSession prepares one signed-out account without persistent storage.
-func newWebSession(relay *Relay, client netip.Addr, now time.Time, userAgent string, appleMobile bool) (*webSession, error) {
+// newWebSession prepares one signed-out account in scope without persistent storage.
+func newWebSession(relay *Relay, scope Scope, client netip.Addr, now time.Time, userAgent string, appleMobile bool) (*webSession, error) {
+	ctx, cancel := scopeContext(relay.ctx, scope)
 	session := &webSession{
 		device:         browserDevice(userAgent, appleMobile),
 		client:         client,
 		relay:          relay,
+		scope:          scope.ID,
+		ctx:            ctx,
+		cancel:         cancel,
 		auth:           control.AuthV1{State: control.AuthSignedOut},
 		idleSince:      now,
 		notify:         make(chan struct{}),
@@ -91,6 +100,7 @@ func newWebSession(relay *Relay, client netip.Addr, now time.Time, userAgent str
 	}
 	handler, err := session.newHandler(nil)
 	if err != nil {
+		cancel()
 		return nil, err
 	}
 	session.handler = handler
@@ -297,8 +307,10 @@ func (session *webSession) expired(now time.Time, ttl time.Duration) bool {
 	return session.attached == 0 && now.Sub(session.idleSince) > ttl
 }
 
-// close ends sign-in, erases the account and shuts the handler; play connections end with ctx.
+// close ends the session context and sign-in, erases the account, waits for play to end and
+// then shuts the handler and its upstream preparations.
 func (session *webSession) close() {
+	session.cancel()
 	session.mu.Lock()
 	if session.closed {
 		session.mu.Unlock()
@@ -310,9 +322,13 @@ func (session *webSession) close() {
 	}
 	session.dropAccountLocked()
 	handler := session.handler
+	play := session.play
 	session.mu.Unlock()
 	// A cancelled worker still releases any account it built before it returns.
 	session.signIns.Wait()
+	if play != nil {
+		<-play.done
+	}
 	if err := handler.Close(); err != nil {
 		session.relay.logger.Warn("web session close", "error", redact.Error(err))
 	}

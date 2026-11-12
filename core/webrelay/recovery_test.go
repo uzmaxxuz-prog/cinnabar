@@ -37,14 +37,14 @@ func TestResumeSurvivesLostReplacementDelivery(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				relay := testRelay(t)
 				client := netip.MustParseAddr("192.0.2.1")
-				controller, detach, err := relay.openControl(client, "", time.Now(), testBrowserUserAgent, false)
+				controller, detach, err := relay.openControl(Scope{}, client, "", time.Now(), testBrowserUserAgent, false)
 				if err != nil {
 					t.Fatal(err)
 				}
 				lastKnown := controller.session.token
 				if test.failAt == 1 {
 					detach(time.Now())
-					controller, detach, err = relay.openControl(client, lastKnown, time.Now(), testBrowserUserAgent, false)
+					controller, detach, err = relay.openControl(Scope{}, client, lastKnown, time.Now(), testBrowserUserAgent, false)
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -70,7 +70,7 @@ func TestResumeSurvivesLostReplacementDelivery(t *testing.T) {
 				detach(time.Now())
 				// Further lost welcome responses must preserve the browser's same last-known token.
 				for range 3 {
-					resumed, detach, err := relay.openControl(client, lastKnown, time.Now(), testBrowserUserAgent, false)
+					resumed, detach, err := relay.openControl(Scope{}, client, lastKnown, time.Now(), testBrowserUserAgent, false)
 					if err != nil || resumed.session != controller.session {
 						t.Fatal("lost replacement made the retained account inaccessible", err)
 					}
@@ -92,7 +92,7 @@ func TestResumeOverlapKeepsOriginalExpiryAndGeneration(t *testing.T) {
 	relay := testRelay(t)
 	now := time.Now()
 	client := netip.MustParseAddr("192.0.2.1")
-	controller, detach, err := relay.openControl(client, "", now, testBrowserUserAgent, false)
+	controller, detach, err := relay.openControl(Scope{}, client, "", now, testBrowserUserAgent, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,29 +100,29 @@ func TestResumeOverlapKeepsOriginalExpiryAndGeneration(t *testing.T) {
 	previous := controller.session.token
 	discarded := testWelcome(t, relay, controller, true, now.Add(resumeTTL/2)).Resume
 	oldController, oldDetach := controller, detach
-	controller, detach, err = relay.openControl(client, previous, now.Add(resumeTTL/2), testBrowserUserAgent, false)
+	controller, detach, err = relay.openControl(Scope{}, client, previous, now.Add(resumeTTL/2), testBrowserUserAgent, false)
 	if err != nil || controller.session != oldController.session || oldController.ctx.Err() == nil {
 		t.Fatal("valid previous bearer did not take over the retained account", err)
 	}
 	oldDetach(now)
 	replacement := testWelcome(t, relay, controller, false, now.Add(resumeTTL/2))
-	if _, _, err := relay.openControl(client, discarded, now.Add(resumeTTL/2), testBrowserUserAgent, false); !errors.Is(err, errResume) {
+	if _, _, err := relay.openControl(Scope{}, client, discarded, now.Add(resumeTTL/2), testBrowserUserAgent, false); !errors.Is(err, errResume) {
 		t.Fatal("rotated-out bearer resumed control", err)
 	}
-	if _, _, err := relay.playSession(nil, hello{Resume: previous, Generation: controller.generation}, now.Add(resumeTTL/2)); err != nil {
+	if _, _, err := relay.playSession(Scope{}, nil, hello{Resume: previous, Generation: controller.generation}, now.Add(resumeTTL/2)); err != nil {
 		t.Fatal("overlapping bearer could not open play", err)
 	}
-	if _, _, err := relay.playSession(nil, hello{Resume: previous, Generation: controller.generation + 1}, now); !errors.Is(err, errResume) {
+	if _, _, err := relay.playSession(Scope{}, nil, hello{Resume: previous, Generation: controller.generation + 1}, now); !errors.Is(err, errResume) {
 		t.Fatal("overlapping bearer bypassed the play generation", err)
 	}
-	if _, _, err := relay.playSession(nil, hello{Resume: previous, Generation: controller.generation}, now.Add(resumeTTL)); !errors.Is(err, errResume) {
+	if _, _, err := relay.playSession(Scope{}, nil, hello{Resume: previous, Generation: controller.generation}, now.Add(resumeTTL)); !errors.Is(err, errResume) {
 		t.Fatal("rotation extended the previous bearer's expiry", err)
 	}
-	if _, _, err := relay.playSession(nil, hello{Resume: replacement.Resume, Generation: controller.generation}, now.Add(resumeTTL)); err != nil {
+	if _, _, err := relay.playSession(Scope{}, nil, hello{Resume: replacement.Resume, Generation: controller.generation}, now.Add(resumeTTL)); err != nil {
 		t.Fatal("replacement expired with the previous bearer", err)
 	}
 	detach(now)
-	if _, _, err := relay.openControl(client, previous, now.Add(resumeTTL), testBrowserUserAgent, false); !errors.Is(err, errResume) {
+	if _, _, err := relay.openControl(Scope{}, client, previous, now.Add(resumeTTL), testBrowserUserAgent, false); !errors.Is(err, errResume) {
 		t.Fatal("expired previous bearer resumed control", err)
 	}
 }
@@ -131,7 +131,7 @@ func TestInvalidResumeDoesNotRetireController(t *testing.T) {
 	relay := testRelay(t)
 	now := time.Now()
 	client := netip.MustParseAddr("192.0.2.1")
-	controller, detach, err := relay.openControl(client, "", now, testBrowserUserAgent, false)
+	controller, detach, err := relay.openControl(Scope{}, client, "", now, testBrowserUserAgent, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestInvalidResumeDoesNotRetireController(t *testing.T) {
 		{token: "invalid", now: now},
 		{token: controller.session.token, now: now.Add(resumeTTL)},
 	} {
-		if _, _, err := relay.openControl(client, test.token, test.now, testBrowserUserAgent, false); !errors.Is(err, errResume) {
+		if _, _, err := relay.openControl(Scope{}, client, test.token, test.now, testBrowserUserAgent, false); !errors.Is(err, errResume) {
 			t.Fatal("invalid or expired bearer resumed control", err)
 		}
 		if controller.ctx.Err() != nil || controller.session.controller != controller {
@@ -156,7 +156,7 @@ func TestKeepaliveOverlapDiscardsOlderBearers(t *testing.T) {
 	relay := testRelay(t)
 	now := time.Now()
 	client := netip.MustParseAddr("192.0.2.1")
-	controller, detach, err := relay.openControl(client, "", now, testBrowserUserAgent, false)
+	controller, detach, err := relay.openControl(Scope{}, client, "", now, testBrowserUserAgent, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,14 +165,14 @@ func TestKeepaliveOverlapDiscardsOlderBearers(t *testing.T) {
 	discarded := ""
 	for range 3 {
 		current := testWelcome(t, relay, controller, true, now).Resume
-		if _, _, err := relay.playSession(nil, hello{Resume: previous, Generation: controller.generation}, now); err != nil {
+		if _, _, err := relay.playSession(Scope{}, nil, hello{Resume: previous, Generation: controller.generation}, now); err != nil {
 			t.Fatal("most recent bearer was discarded", err)
 		}
 		if len(relay.tokens) != 2 {
 			t.Fatal("keepalives accumulated old bearers")
 		}
 		if discarded != "" {
-			if _, _, err := relay.playSession(nil, hello{Resume: discarded, Generation: controller.generation}, now); !errors.Is(err, errResume) {
+			if _, _, err := relay.playSession(Scope{}, nil, hello{Resume: discarded, Generation: controller.generation}, now); !errors.Is(err, errResume) {
 				t.Fatal("an older bearer remained usable", err)
 			}
 		}
@@ -188,7 +188,7 @@ func TestKeepaliveRetainsAcknowledgedBearerUntilReplacementArrives(t *testing.T)
 	relay := testRelay(t)
 	client := netip.MustParseAddr("192.0.2.1")
 	now := time.Now()
-	controller, detach, err := relay.openControl(client, "", now, testBrowserUserAgent, false)
+	controller, detach, err := relay.openControl(Scope{}, client, "", now, testBrowserUserAgent, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +207,7 @@ func TestKeepaliveRetainsAcknowledgedBearerUntilReplacementArrives(t *testing.T)
 		t.Fatal("a delayed pong acknowledged an unseen replacement")
 	}
 	detach(now.Add(3*keepAliveInterval + time.Second))
-	resumed, finish, err := relay.openControl(client, acknowledged.Resume, now.Add(3*keepAliveInterval+time.Second), testBrowserUserAgent, false)
+	resumed, finish, err := relay.openControl(Scope{}, client, acknowledged.Resume, now.Add(3*keepAliveInterval+time.Second), testBrowserUserAgent, false)
 	if err != nil || resumed.session != controller.session {
 		t.Fatal("unanswered keepalives discarded the last acknowledged bearer", err)
 	}
@@ -221,13 +221,13 @@ func TestUnacknowledgedResumeWelcomeSurvivesRepeatedPings(t *testing.T) {
 	relay := testRelay(t)
 	now := time.Now()
 	client := netip.MustParseAddr("192.0.2.1")
-	controller, detach, err := relay.openControl(client, "", now, testBrowserUserAgent, false)
+	controller, detach, err := relay.openControl(Scope{}, client, "", now, testBrowserUserAgent, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	known := controller.session.token
 	detach(now)
-	controller, detach, err = relay.openControl(client, known, now.Add(time.Second), testBrowserUserAgent, false)
+	controller, detach, err = relay.openControl(Scope{}, client, known, now.Add(time.Second), testBrowserUserAgent, false)
 	if err != nil {
 		t.Fatal(err)
 	}
