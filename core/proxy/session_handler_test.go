@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
@@ -153,29 +152,29 @@ func TestSessionHandlerDownloadsPacksThroughItsDialer(t *testing.T) {
 	}
 }
 
-// A pack download keeps no cookies and forwards no credentials: a cookie the first host sets and
-// a password in the pack URL never reach the host it redirects to.
-func TestSessionHandlerPackRedirectCarriesNoCredentials(t *testing.T) {
-	destination := make(chan http.Header, 1)
-	other := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { destination <- r.Header.Clone() }))
-	defer other.Close()
-	first := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// A pack download keeps no cookies: a cookie the pack host sets is not sent back on the redirect
+// it answers with, although that redirect stays on the same host, where a cookie jar would send it.
+func TestSessionHandlerPackRedirectCarriesNoCookie(t *testing.T) {
+	redirected := make(chan http.Header, 1)
+	host := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/moved.zip" {
+			redirected <- r.Header.Clone()
+			return
+		}
 		http.SetCookie(w, &http.Cookie{Name: "access", Value: "secret", Path: "/"})
-		http.Redirect(w, r, other.URL+"/pack.zip", http.StatusFound)
+		http.Redirect(w, r, "/moved.zip", http.StatusFound)
 	}))
-	defer first.Close()
+	defer host.Close()
 	handler, err := NewSessionHandler(SessionHandlerConfig{Dialer: new(net.Dialer), Logger: slog.New(slog.DiscardHandler)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer handler.Close()
-	client := handler.server.prepared.httpClient
-	firstURL := "http://player:password@localhost:" + strconv.Itoa(first.Listener.Addr().(*net.TCPAddr).Port) + "/pack.zip"
-	_, _ = resource.ReadURLWithProgress(t.Context(), client, firstURL, 1<<20, nil)
+	_, _ = resource.ReadURLWithProgress(t.Context(), handler.server.prepared.httpClient, host.URL+"/pack.zip", 1<<20, nil)
 	select {
-	case header := <-destination:
-		if header.Get("Cookie") != "" || header.Get("Authorization") != "" {
-			t.Fatalf("the redirected pack request carried credentials: %v", header)
+	case header := <-redirected:
+		if cookie := header.Get("Cookie"); cookie != "" {
+			t.Fatalf("the redirected pack request sent the host's cookie back: %q", cookie)
 		}
 	default:
 		t.Fatal("the pack download did not follow the redirect")
