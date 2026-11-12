@@ -1,8 +1,9 @@
 # Browser relay
 
 The Go relay keeps Microsoft accounts in memory and joins public RakNet servers,
-or only one configured game server, through the existing core session handler. WebTransport over HTTP/3 is the preferred
-transport. HTTPS WebSocket connections provide control and play fallback channels.
+or only one configured game server, through the existing core session handler.
+WebTransport over HTTP/3 is the preferred transport. HTTPS WebSocket connections
+provide control and play fallback channels.
 The relay does not serve the browser page or runtime assets.
 
 Build `core/cmd/bedrock-web-relay` with the core's Go toolchain and run the resulting
@@ -33,9 +34,9 @@ including scheme and any nondefault port. Forwarded address headers are ignored.
 Open the configured **UDP** port end to end for HTTP/3, and the configured **TCP**
 port for HTTPS WebSocket fallback. They may use the same port number. Permit
 outbound UDP to public game servers, or only to the configured game endpoint, and
-HTTP/HTTPS for resource packs and Microsoft sign-in. An HTTPS reverse proxy must explicitly support WebTransport Extended
-CONNECT and UDP; ordinary HTTP forwarding does not provide that path. Static
-hosting can run separately.
+HTTP/HTTPS for resource packs and Microsoft sign-in. An HTTPS reverse proxy must
+explicitly support WebTransport Extended CONNECT and UDP; ordinary HTTP forwarding
+does not provide that path. Static hosting can run separately.
 
 The shared [bridge contract](../crates/bridge/data/contract.json) owns endpoint
 paths, the WebSocket subprotocol, Hello and control framing, message names, limits,
