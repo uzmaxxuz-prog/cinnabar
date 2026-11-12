@@ -353,7 +353,12 @@ func TestGameEndpointRefusesTransferOutsideIt(t *testing.T) {
 
 	play, conn = browser.requireJoined(t, upstream.address)
 	server = upstream.requireJoin(t)
+	// The browser follows the first transfer of a batch; a later one outside the endpoint must not
+	// replace the destination the next targetless Connect dials.
 	if err := server.WritePacket(&packet.Transfer{Address: endpoint.Addr().String(), Port: endpoint.Port()}); err != nil {
+		t.Fatal(err)
+	}
+	if err := server.WritePacket(&packet.Transfer{Address: "127.0.0.1", Port: outside.port}); err != nil {
 		t.Fatal(err)
 	}
 	if err := server.Flush(); err != nil {
@@ -365,6 +370,7 @@ func TestGameEndpointRefusesTransferOutsideIt(t *testing.T) {
 	browser.requireEnded(t, conn)
 	browser.requireJoined(t, "")
 	upstream.requireJoin(t)
+	outside.requireSilent(t)
 }
 
 // A transfer the server sends during login is a hop the core would follow before the handoff; it
