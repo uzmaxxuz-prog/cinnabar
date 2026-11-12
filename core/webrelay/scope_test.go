@@ -476,9 +476,6 @@ func TestScopeIsolatesBrowsersBehindOneAddress(t *testing.T) {
 	cookieB := admissions.grant("B", time.Now().Add(time.Hour))
 	controlA, _ := host.dial(t, bridgecontract.RelayChannelControl, cookieA)
 	welcomeA := scopeControl(t, controlA, "")
-	playConnA, _ := host.dial(t, bridgecontract.RelayChannelPlay, cookieA)
-	playA := scopePlay(t, playConnA, welcomeA, upstream)
-	serverA := upstream.requireJoin(t)
 	controlB, _ := host.dial(t, bridgecontract.RelayChannelControl, cookieB)
 	if welcomeB := scopeControl(t, controlB, ""); welcomeB.Type != bridgecontract.RelayEventWelcome || welcomeB.Resume == welcomeA.Resume {
 		t.Fatal("a second admission behind the same address did not get its own session")
@@ -489,10 +486,14 @@ func TestScopeIsolatesBrowsersBehindOneAddress(t *testing.T) {
 		t.Fatalf("another admission's cookie resumed the session with its bearer: %+v", refused)
 	}
 	requireClosed(t, cross, "refused control")
-	awaitTransports(t, relay, 3)
+	awaitTransports(t, relay, 2)
+	// A's play slot is free, so only the scope rule can refuse this join.
 	crossPlay, _ := host.dial(t, bridgecontract.RelayChannelPlay, cookieB)
 	requireRefusedPlay(t, crossPlay, welcomeA, upstream)
-	awaitTransports(t, relay, 3)
+	awaitTransports(t, relay, 2)
+	playConnA, _ := host.dial(t, bridgecontract.RelayChannelPlay, cookieA)
+	playA := scopePlay(t, playConnA, welcomeA, upstream)
+	serverA := upstream.requireJoin(t)
 	requireAlive(t, controlA, playA, serverA)
 
 	resumed, _ := host.dial(t, bridgecontract.RelayChannelControl, cookieA)
