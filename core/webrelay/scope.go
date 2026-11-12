@@ -68,5 +68,6 @@ func (relay *Relay) retire(session *webSession) {
 	relay.conns.Add(1)
 	relay.mu.Unlock()
 	defer relay.conns.Done()
+	session.awaitPlay()
 	session.close()
 }

@@ -307,8 +307,19 @@ func (session *webSession) expired(now time.Time, ttl time.Duration) bool {
 	return session.attached == 0 && now.Sub(session.idleSince) > ttl
 }
 
-// close ends the session context and sign-in, erases the account, waits for play to end and
-// then shuts the handler and its upstream preparations.
+// awaitPlay waits for the running play connection, if any, to release the handler.
+// The caller has cancelled every controller, so no later play can claim it.
+func (session *webSession) awaitPlay() {
+	session.mu.Lock()
+	play := session.play
+	session.mu.Unlock()
+	if play != nil {
+		<-play.done
+	}
+}
+
+// close ends the session context and sign-in, erases the account and shuts the handler;
+// play connections end with ctx.
 func (session *webSession) close() {
 	session.cancel()
 	session.mu.Lock()
@@ -322,13 +333,9 @@ func (session *webSession) close() {
 	}
 	session.dropAccountLocked()
 	handler := session.handler
-	play := session.play
 	session.mu.Unlock()
 	// A cancelled worker still releases any account it built before it returns.
 	session.signIns.Wait()
-	if play != nil {
-		<-play.done
-	}
 	if err := handler.Close(); err != nil {
 		session.relay.logger.Warn("web session close", "error", redact.Error(err))
 	}
