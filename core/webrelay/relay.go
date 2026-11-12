@@ -40,6 +40,11 @@ type Config struct {
 	// Upgrade. An error refuses the request, and every session lives no longer than its scope.
 	// Nil serves sessions bound only to the relay.
 	ResolveScope func(*http.Request) (Scope, error)
+	// GameEndpoint, when set, is the only game server sessions may join, private or public. A
+	// Connect must name exactly its IP and port and the relay dials its own copy; transfer hops,
+	// redials and later Connects are held to it too, and a server transfer elsewhere ends the
+	// session. HTTP requests, such as pack downloads, still reach public hosts only. The zero value
+	// admits public game servers only.
 	GameEndpoint netip.AddrPort
 }
 
@@ -47,7 +52,7 @@ type Config struct {
 type Relay struct {
 	cfg         Config
 	logger      *slog.Logger
-	dialer      *net.Dialer
+	dialer      *upstreamDialer
 	ctx         context.Context
 	cancel      context.CancelFunc
 	conns       sync.WaitGroup
@@ -67,13 +72,13 @@ type clientLimiter struct {
 	lastSeen time.Time
 }
 
-// New creates a relay with public-only upstream egress and fixed admission bounds.
+// New creates a relay with the configured upstream egress and fixed admission bounds.
 func New(cfg Config) *Relay {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Relay{cfg: cfg, logger: cfg.Logger, dialer: newUpstreamDialer(false), ctx: ctx, cancel: cancel,
+	return &Relay{cfg: cfg, logger: cfg.Logger, dialer: newUpstreamDialer(cfg.GameEndpoint), ctx: ctx, cancel: cancel,
 		sessions: make(map[*webSession]struct{}), scopes: make(map[string]*webSession), tokens: make(map[string]resumeBearer), perIP: make(map[netip.Addr]int),
 		connections: make(map[netip.Addr]int), limiters: make(map[netip.Addr]*clientLimiter)}
 }

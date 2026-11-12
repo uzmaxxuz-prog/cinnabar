@@ -368,14 +368,14 @@ func TestEgressAndOriginPolicy(t *testing.T) {
 	if !publicUpstream(netip.MustParseAddr("8.8.8.8")) {
 		t.Fatal("public address refused")
 	}
-	_, err := newUpstreamDialer(false).DialContext(t.Context(), "udp", "localhost:19132")
+	_, err := newUpstreamDialer(netip.AddrPort{}).DialContext(t.Context(), "udp", "localhost:19132")
 	if !errors.Is(err, errBlockedUpstream) {
 		t.Fatal("resolved loopback bypassed policy", err)
 	}
-	if _, err = selectTarget(t.Context(), control.TargetRealm, "1"); err == nil {
+	if _, err = newUpstreamDialer(netip.AddrPort{}).selectTarget(t.Context(), control.TargetRealm, "1"); err == nil {
 		t.Fatal("non-RakNet target admitted")
 	}
-	if _, err = selectTarget(t.Context(), control.TargetRakNet, "host:0"); err == nil {
+	if _, err = newUpstreamDialer(netip.AddrPort{}).selectTarget(t.Context(), control.TargetRakNet, "host:0"); err == nil {
 		t.Fatal("zero port admitted")
 	}
 	relay := testRelay(t)

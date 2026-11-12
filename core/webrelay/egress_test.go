@@ -159,8 +159,8 @@ func gameConnect(t *testing.T, target string) []byte {
 	return append([]byte{bridgecontract.SessionKindConnect}, body...)
 }
 
-// connect sends a Connect to target on a fresh play and returns the core's first answer.
-func (browser *gameBrowser) connect(t *testing.T, target string) (byte, *streamnet.FramedConn, net.Conn) {
+// send opens a fresh play and sends a Connect to target without waiting for the core.
+func (browser *gameBrowser) send(t *testing.T, target string) (*streamnet.FramedConn, net.Conn) {
 	t.Helper()
 	conn, _ := browser.host.dial(t, bridgecontract.RelayChannelPlay, "")
 	if err := writeJSON(t.Context(), conn, hello{Version: bridgecontract.RelayVersion, Channel: bridgecontract.RelayChannelPlay,
@@ -171,6 +171,13 @@ func (browser *gameBrowser) connect(t *testing.T, target string) (byte, *streamn
 	if _, err := play.Write(gameConnect(t, target)); err != nil {
 		t.Fatal(err)
 	}
+	return play, conn
+}
+
+// connect sends a Connect to target on a fresh play and returns the core's first answer.
+func (browser *gameBrowser) connect(t *testing.T, target string) (byte, *streamnet.FramedConn, net.Conn) {
+	t.Helper()
+	play, conn := browser.send(t, target)
 	return answer(t, play), play, conn
 }
 
@@ -262,10 +269,7 @@ func TestGameEndpointRefusesEveryOtherTarget(t *testing.T) {
 		browser.requireRefused(t, target, game, otherPort, otherHost)
 	}
 
-	kind, _, _ := browser.connect(t, game.address)
-	if kind == bridgecontract.SessionKindDisconnect {
-		t.Fatal("the endpoint itself was refused")
-	}
+	browser.send(t, game.address)
 	game.requireDial(t)
 }
 
@@ -319,10 +323,7 @@ func TestGameEndpointConfiguredAsMappedIPv4(t *testing.T) {
 	relay, host := gameRelay(t, netip.MustParseAddrPort(game.at("::ffff:127.0.0.1")))
 	browser := openGameBrowser(t, relay, host)
 
-	kind, _, _ := browser.connect(t, game.address)
-	if kind == bridgecontract.SessionKindDisconnect {
-		t.Fatal("the endpoint was refused when configured as IPv4-mapped IPv6")
-	}
+	browser.send(t, game.address)
 	game.requireDial(t)
 }
 

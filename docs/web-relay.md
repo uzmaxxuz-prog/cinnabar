@@ -71,6 +71,18 @@ Public-address checks apply after DNS resolution to every game connection,
 transfer hop, pack URL and
 pack redirect; environment proxies cannot bypass them.
 
+A server that embeds the relay for one game server sets `Config.GameEndpoint` to
+that server's IP and port; it may be private. The client then cannot choose the
+game: a Connect must name exactly that IP and port, and the relay dials its own
+configured copy. Every game socket, including redials, transfer hops and the
+Connects of a resumed session, may reach only that endpoint. The relay checks the
+written address before DNS resolution and the socket's address again after it, so
+host names, IPv4-mapped spellings, other ports and other hosts are refused before
+any datagram is sent. A server transfer to another address ends the session with a
+disconnect and is not followed. Pack downloads and their redirects keep the
+public-only policy, so the game endpoint is never an HTTP destination; the pack
+client keeps no cookies. The zero value keeps public-only game egress.
+
 A server that embeds `Relay.Handler` can bind sessions to its own admission with
 `Config.ResolveScope`. It returns each request's `Scope`: an opaque ID, an absolute
 deadline and a revocation context that outlives the request. A resolver error, a

@@ -7,8 +7,6 @@ import (
 	"errors"
 	"net"
 	"net/netip"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -115,7 +113,8 @@ func (session *webSession) newHandler(account *authcache.Account) (*proxy.Sessio
 		Account:         account,
 		Logger:          session.relay.logger,
 		Dialer:          session.relay.dialer,
-		SelectTarget:    selectTarget,
+		SelectTarget:    session.relay.dialer.selectTarget,
+		AllowTransfer:   session.relay.dialer.allowTransfer,
 		Device:          session.device,
 		ConnectProgress: session.setConnect,
 	})
@@ -341,18 +340,4 @@ func (session *webSession) close() {
 	if err := handler.Close(); err != nil {
 		session.relay.logger.Warn("web session close", "error", redact.Error(err))
 	}
-}
-
-// selectTarget admits only a host:port RakNet target; the dialer decides whether it is reachable.
-func selectTarget(_ context.Context, kind, value string) (string, error) {
-	if kind != control.TargetRakNet {
-		return "", control.ErrInvalidTarget
-	}
-	value = strings.TrimSpace(value)
-	host, port, err := net.SplitHostPort(value)
-	number, portErr := strconv.ParseUint(port, 10, 16)
-	if err != nil || host == "" || portErr != nil || number == 0 {
-		return "", control.ErrInvalidTarget
-	}
-	return value, nil
 }

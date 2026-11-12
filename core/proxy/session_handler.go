@@ -25,8 +25,11 @@ type SessionHandlerConfig struct {
 	Dialer raknet.UpstreamDialer
 	// SelectTarget maps a Connect's connect.v1 target to an address; nil rejects targeted Connects.
 	SelectTarget func(ctx context.Context, kind, value string) (string, error)
-	Device       *device.Profile // nil keeps the client's claimed device
-	OnDisconnect func(DisconnectInfo)
+	// AllowTransfer decides each server transfer's host:port after the handoff; nil allows every
+	// usable transfer. A refused transfer is not recorded and ends the session with a disconnect.
+	AllowTransfer func(address string) error
+	Device        *device.Profile // nil keeps the client's claimed device
+	OnDisconnect  func(DisconnectInfo)
 	// ConnectProgress receives the join's live stage and pack download progress; a zero stage
 	// ends it. Callbacks must return promptly.
 	ConnectProgress func(ConnectProgress)
@@ -48,7 +51,7 @@ func NewSessionHandler(cfg SessionHandlerConfig) (*SessionHandler, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	transfers := new(TransferState)
+	transfers := &TransferState{allow: cfg.AllowTransfer}
 	prepared := newPreparedConnections("", cfg.Account, logger)
 	prepared.addressNetwork = network
 	prepared.httpClient = dialerHTTPClient(cfg.Dialer)

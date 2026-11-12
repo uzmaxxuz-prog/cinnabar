@@ -26,12 +26,17 @@ type TransferState struct {
 	next string
 	// OnTransfer, when set, is called after each recorded transfer; it must not block.
 	OnTransfer func(TransferTarget)
+	// allow, when set, refuses transfers outside the caller's policy.
+	allow func(address string) error
 }
 
 // Record makes target the next upstream. Unusable targets return an error and change nothing.
 func (s *TransferState) Record(target TransferTarget) error {
 	address, err := transferAddress(target.Host, target.Port)
 	if err != nil {
+		return err
+	}
+	if err := s.admits(address); err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -44,6 +49,14 @@ func (s *TransferState) Record(target TransferTarget) error {
 		callback(TransferTarget{Host: host, Port: uint16(parsed)})
 	}
 	return nil
+}
+
+// admits applies the transfer policy to address; a nil state or policy admits every address.
+func (s *TransferState) admits(address string) error {
+	if s == nil || s.allow == nil {
+		return nil
+	}
+	return s.allow(address)
 }
 
 // Upstream returns the recorded transfer address, or initial if none was recorded.
