@@ -137,8 +137,6 @@ func (relay *Relay) openControl(scope Scope, client netip.Addr, token string, no
 	relay.mu.Lock()
 	if relay.ctx.Err() != nil {
 		err = net.ErrClosed
-	} else if scope.ID != "" && !scope.valid(now) {
-		err = errScope
 	} else if _, exists := relay.sessions[session]; !exists || session.ctx.Err() != nil || token != "" && relay.resumeLocked(token, now) != session {
 		// The bearer or session may have expired while this controller waited.
 		err = errResume
