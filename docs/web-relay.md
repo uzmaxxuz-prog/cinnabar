@@ -71,6 +71,16 @@ Public-address checks apply after DNS resolution to every game connection,
 transfer hop, pack URL and
 pack redirect; environment proxies cannot bypass them.
 
+A server that embeds `Relay.Handler` can bind sessions to its own admission with
+`Config.ResolveScope`. It returns each request's `Scope`: an opaque ID, an absolute
+deadline and a revocation context that outlives the request. A resolver error, a
+revoked scope or a passed deadline refuses control, play and WebTransport with HTTP
+403 before Upgrade. Control and play join only sessions of their own scope, so a
+bearer never crosses admissions, and a fresh control closes the scope's earlier
+session with its bearers. Revocation or the deadline ends both channels, the retained
+session and its upstream connection, and frees their quota. A session keeps the
+deadline of the scope that created it, and the HTTP request context never ends it.
+
 All current gameplay batches and pack chunks use reliable ordered play framing.
 Inbound frame buffers grow with received data instead of allocating the full
 advertised payload from its header. The shared bridge frame limit still applies.
