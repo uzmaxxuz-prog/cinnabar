@@ -274,7 +274,7 @@ func TestGameEndpointRefusesEveryOtherTarget(t *testing.T) {
 }
 
 // The relay's dialer opens every session socket, transfer hops and redials included, so it holds
-// game sockets to the endpoint itself and keeps HTTP, such as pack downloads, off the endpoint.
+// game sockets to the endpoint itself and keeps HTTP, such as pack downloads, off a private endpoint.
 func TestGameDialerReachesOnlyItsEndpoint(t *testing.T) {
 	game := newEgressProbe(t, "127.0.0.1:0")
 	game.listenTCP(t)

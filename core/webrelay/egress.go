@@ -42,7 +42,8 @@ var reservedPrefixes = []netip.Prefix{
 	netip.MustParsePrefix("fec0::/10"),
 }
 
-// publicUpstream reports whether addr is a public unicast host a relay session may reach.
+// publicUpstream reports whether addr is a public unicast host, the only kind the public-only
+// policy admits.
 func publicUpstream(addr netip.Addr) bool {
 	addr = addr.Unmap()
 	if !addr.IsValid() || !addr.IsGlobalUnicast() || addr.IsPrivate() {
@@ -79,9 +80,11 @@ func newPublicDialer() *net.Dialer {
 }
 
 // upstreamDialer opens every socket of relay sessions. Game sockets are UDP, which RakNet uses
-// for the first join, redials, transfer hops and reconnects alike. HTTP connections, such as pack
-// downloads and their redirects, are TCP and always keep the public-only policy, so a game endpoint
-// never becomes an HTTP destination. Other networks are refused.
+// for the first join, redials, transfer hops and reconnects alike: without an endpoint they reach
+// public hosts only, with one only the endpoint. HTTP connections, such as pack downloads and their
+// redirects, are TCP and keep the public-only policy in both modes, so a private endpoint is never
+// an HTTP destination while a public endpoint's host is reachable like any public host. Other
+// networks are refused.
 type upstreamDialer struct {
 	// endpoint is the only game server sessions may reach; the zero value admits public servers.
 	endpoint netip.AddrPort
