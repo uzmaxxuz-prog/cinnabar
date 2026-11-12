@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -304,4 +306,100 @@ func TestRequestContextCancellationDoesNotEndRelayGame(t *testing.T) {
 		t.Fatal("the upstream player left after the request context ended")
 	default:
 	}
+}
+
+// errNoAdmission is the embedding server's refusal of a request without a valid access cookie.
+var errNoAdmission = errors.New("no admission")
+
+// scopeAdmissions stands in for the embedding server's access store: an access cookie names one
+// admission, which the server can revoke while browsers still play under it.
+type scopeAdmissions struct {
+	mu      sync.Mutex
+	entries map[string]*scopeAdmission
+}
+
+// scopeAdmission is one granted access with its own revocation.
+type scopeAdmission struct {
+	deadline time.Time
+	ctx      context.Context
+	cancel   context.CancelFunc
+}
+
+// newScopeAdmissions returns an empty access store whose admissions end with the test.
+func newScopeAdmissions(t *testing.T) *scopeAdmissions {
+	t.Helper()
+	admissions := &scopeAdmissions{entries: make(map[string]*scopeAdmission)}
+	t.Cleanup(func() {
+		admissions.mu.Lock()
+		defer admissions.mu.Unlock()
+		for _, entry := range admissions.entries {
+			entry.cancel()
+		}
+	})
+	return admissions
+}
+
+// grant admits id until deadline and returns its browser cookie header.
+func (admissions *scopeAdmissions) grant(id string, deadline time.Time) string {
+	ctx, cancel := context.WithCancel(context.Background())
+	admissions.mu.Lock()
+	admissions.entries[id] = &scopeAdmission{deadline: deadline, ctx: ctx, cancel: cancel}
+	admissions.mu.Unlock()
+	return "access=" + id
+}
+
+// revoke ends id's admission, as a logout or password change does.
+func (admissions *scopeAdmissions) revoke(id string) {
+	admissions.mu.Lock()
+	defer admissions.mu.Unlock()
+	admissions.entries[id].cancel()
+}
+
+// resolve maps a request's access cookie to its server-side scope.
+func (admissions *scopeAdmissions) resolve(r *http.Request) (Scope, error) {
+	cookie, err := r.Cookie("access")
+	if err != nil {
+		return Scope{}, errNoAdmission
+	}
+	admissions.mu.Lock()
+	defer admissions.mu.Unlock()
+	entry := admissions.entries[cookie.Value]
+	if entry == nil {
+		return Scope{}, errNoAdmission
+	}
+	return Scope{ID: cookie.Value, Deadline: entry.deadline, Revoked: entry.ctx}, nil
+}
+
+// requireClosed waits until the relay closes conn; nothing else in the test closes it.
+func requireClosed(t *testing.T, conn net.Conn, what string) {
+	t.Helper()
+	closed := make(chan struct{})
+	go func() {
+		defer close(closed)
+		_, _ = io.Copy(io.Discard, conn)
+	}()
+	select {
+	case <-closed:
+	case <-time.After(testwait.DefaultTimeout):
+		t.Fatalf("%s stayed open", what)
+	}
+}
+
+func TestScopeRevocationEndsBothChannelsAndUpstream(t *testing.T) {
+	admissions := newScopeAdmissions(t)
+	relay := scopeRelay(t, Config{ResolveScope: admissions.resolve})
+	upstream := newScopeUpstream(t)
+	host := newScopeHost(t, relay.Handler())
+	cookie := admissions.grant("A", time.Now().Add(time.Hour))
+	controlConn, _ := host.dial(t, bridgecontract.RelayChannelControl, cookie)
+	welcome := scopeControl(t, controlConn, "")
+	playConn, _ := host.dial(t, bridgecontract.RelayChannelPlay, cookie)
+	scopePlay(t, playConn, welcome, upstream)
+	server := upstream.requireJoin(t)
+
+	admissions.revoke("A")
+
+	requireClosed(t, controlConn, "control")
+	requireClosed(t, playConn, "play")
+	upstream.requireLeft(t, server)
 }

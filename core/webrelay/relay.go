@@ -36,6 +36,10 @@ var (
 type Config struct {
 	AllowedOrigins []string
 	Logger         *slog.Logger
+	// ResolveScope, when set, returns the admission of each control and play request before
+	// Upgrade. An error refuses the request, and every session lives no longer than its scope.
+	// Nil serves sessions bound only to the relay.
+	ResolveScope func(*http.Request) (Scope, error)
 }
 
 // Relay owns bounded in-memory accounts and transport connections. Close erases the accounts.
