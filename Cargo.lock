@@ -7809,6 +7809,7 @@ dependencies = [
  "criterion",
  "env-compat",
  "far-terrain",
+ "futures",
  "glam",
  "image",
  "libc",
@@ -8804,6 +8805,18 @@ dependencies = [
 [[package]]
 name = "test-time"
 version = "0.2.0"
+
+[[package]]
+name = "texture-compat-fixture"
+version = "0.2.0"
+dependencies = [
+ "console_error_panic_hook",
+ "render",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wgpu",
+]
 
 [[package]]
 name = "thiserror"

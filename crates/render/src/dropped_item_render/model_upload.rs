@@ -232,6 +232,27 @@ pub(super) fn rebuild_models(
     gpu._atlas = Some(texture);
 }
 
+/// Runs the production single-layer allocation for browser validation.
+#[cfg(feature = "texture-compat-diagnostics")]
+pub(crate) fn diagnostic_texture(
+    device: &RenderDevice,
+    queue: &RenderQueue,
+) -> (
+    bevy::render::render_resource::Texture,
+    bevy::render::render_resource::TextureView,
+) {
+    let (texture, view, _) = upload(
+        device,
+        queue,
+        1,
+        1,
+        &[128, 64, 32, 255],
+        &MeshStorage::with_capacity_limit(0),
+    )
+    .expect("fixture texture fits");
+    (texture, view)
+}
+
 /// Allocates the mesh, layer array and view; any out-of-memory failure returns nothing.
 fn upload(
     device: &RenderDevice,

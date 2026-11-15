@@ -34,6 +34,8 @@ mod cloud_render;
 mod deferred_resource;
 mod device_poll;
 pub mod device_settings;
+#[cfg(feature = "texture-compat-diagnostics")]
+pub mod texture_compat_diagnostics;
 
 mod enhanced;
 mod entity_shadow_render;
