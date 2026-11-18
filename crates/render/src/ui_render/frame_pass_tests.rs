@@ -80,6 +80,7 @@ fn retained_layer_is_reused_only_for_identical_content() {
         format: super::super::composite::UI_LAYER_FORMAT,
         usage: bevy::render::render_resource::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = texture.create_view(&Default::default());
     let layer = super::super::composite::UiLayerTexture::detached(texture, view);

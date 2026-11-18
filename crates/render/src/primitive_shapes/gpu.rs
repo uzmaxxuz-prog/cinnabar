@@ -11,8 +11,8 @@ use bevy::{
 };
 use render_api::primitive_shapes::PrimitiveShapeKind;
 use render_model::{
-    NAMETAG_ATLAS_SIDE, NametagAtlasRect,
     primitive_shapes::{PrimitiveActor, PrimitiveInstance, PrimitiveMeshKey, PrimitiveTextRecord},
+    NametagAtlasRect, NAMETAG_ATLAS_SIDE,
 };
 use std::sync::Arc;
 use {super::mesh, render_scene::PrimitiveShapesScene};
@@ -239,6 +239,7 @@ impl ShapeGpu {
             format: TextureFormat::Rgba8UnormSrgb,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let atlas_view = atlas.create_view(&TextureViewDescriptor::default());
         let sampler = device.create_sampler(&SamplerDescriptor {

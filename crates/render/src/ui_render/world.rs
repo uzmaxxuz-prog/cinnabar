@@ -131,7 +131,11 @@ pub(crate) fn draw_ui_view(
         #[cfg(test)]
         gpu.world_passes
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let attachments = [Some(scene_target.color_attachment(target, false))];
+        let attachments = [Some(scene_target.color_attachment(
+            context.command_encoder(),
+            target,
+            false,
+        ))];
         let mut pass = context.begin_tracked_render_pass(RenderPassDescriptor {
             label: Some("retained world-projected UI"),
             color_attachments: &attachments,

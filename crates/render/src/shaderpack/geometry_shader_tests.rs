@@ -268,6 +268,7 @@ fn render_emission(packed: bool, cpu_indices: bool) {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let readback = gpu.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("geometry fixture readback"),

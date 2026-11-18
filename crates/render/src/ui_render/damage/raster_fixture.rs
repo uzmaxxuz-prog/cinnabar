@@ -4,7 +4,7 @@ use super::super::*;
 use crate::gpu_snapshot::Gpu;
 use crate::ui_render as ui;
 use crate::ui_render::pipeline::{
-    UiPipelineKey, UiPipelineSpecializer, ui_bind_group_layout, ui_pipeline_descriptor,
+    ui_bind_group_layout, ui_pipeline_descriptor, UiPipelineKey, UiPipelineSpecializer,
 };
 use bevy::render::render_resource::Specializer;
 use wgpu::util::DeviceExt;
@@ -125,6 +125,7 @@ pub(super) fn target(gpu: &Gpu, depth: bool) -> wgpu::Texture {
                 wgpu::TextureUsages::COPY_SRC
             },
         view_formats: &[],
+        texture_binding_view_dimension: None,
     })
 }
 
@@ -203,6 +204,7 @@ impl Raster {
                 format: FORMAT,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
+                texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
             },
             wgpu::util::TextureDataOrder::LayerMajor,
             &pages,
@@ -254,6 +256,7 @@ impl Raster {
                 format: FORMAT,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             },
             wgpu::util::TextureDataOrder::LayerMajor,
             pixels,

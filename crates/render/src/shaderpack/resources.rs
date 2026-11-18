@@ -277,6 +277,7 @@ impl<'a> ConstantBuilder<'a> {
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: Some(view_dimension),
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor {
             dimension: Some(view_dimension),

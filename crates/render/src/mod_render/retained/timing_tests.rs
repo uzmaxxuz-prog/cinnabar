@@ -101,6 +101,7 @@ fn retained_draws_record_mod_gpu_timing() {
                     format,
                     usage: TextureUsages::RENDER_ATTACHMENT,
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 })
                 .create_view(&default())
         });

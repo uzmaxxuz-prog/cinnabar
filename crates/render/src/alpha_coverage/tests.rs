@@ -138,6 +138,7 @@ fn cutout_raster(gpu: &Gpu, samples: u32, coverage: bool, square: bool) -> Vec<u
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         },
         wgpu::util::TextureDataOrder::LayerMajor,
         &texels,

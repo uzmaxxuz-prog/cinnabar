@@ -215,6 +215,7 @@ fn metal_deferred_pass_markers_emit_readable_timestamps() {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = texture.create_view(&Default::default());
     let mut timestamps = GpuTimestamps::new(&device, &queue, false).unwrap();
@@ -323,6 +324,7 @@ fn metal_depth_resolve_uses_owned_pass_queries_without_extra_passes() {
         format: wgpu::TextureFormat::Depth32Float,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let depth = ViewDepthStencilTexture::new(
         CachedTexture {
@@ -425,6 +427,7 @@ impl SpinWork {
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let buffer = |usage| {
             raw.create_buffer(&wgpu::BufferDescriptor {

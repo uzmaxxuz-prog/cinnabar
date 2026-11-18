@@ -477,6 +477,7 @@ fn upload_page(
             format: TextureFormat::Rgba8UnormSrgb,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             view_formats: raw_views.view_formats(),
+            texture_binding_view_dimension: None,
         })
     })?;
     #[cfg(test)]

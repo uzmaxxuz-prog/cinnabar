@@ -119,6 +119,7 @@ impl MotionView {
                 format: MOTION_FORMAT,
                 usage: TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             })
         })?;
         let view = gpu_allocation::checked(device, "actor velocity view", 0, || {

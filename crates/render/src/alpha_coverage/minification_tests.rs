@@ -51,6 +51,7 @@ fn minified_item_raster(gpu: &Gpu, samples: u32, tint_alpha: f32) -> Vec<u8> {
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
+            texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
         },
         wgpu::util::TextureDataOrder::LayerMajor,
         &texels,
@@ -79,6 +80,7 @@ fn minified_item_raster(gpu: &Gpu, samples: u32, tint_alpha: f32) -> Vec<u8> {
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
         .create_view(&Default::default());
     let bindings = [

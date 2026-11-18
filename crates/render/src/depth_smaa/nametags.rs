@@ -60,7 +60,11 @@ pub(crate) fn nametags_after_smaa(
         .filter_map(|(range, deferred)| deferred.then_some(range))
         .peekable();
     if ranges.peek().is_some() {
-        let attachments = [Some(scene.color_attachment(target, gamma))];
+        let attachments = [Some(scene.color_attachment(
+            context.command_encoder(),
+            target,
+            gamma,
+        ))];
         let mut pass = context.begin_tracked_render_pass(RenderPassDescriptor {
             label: Some("world text after spatial anti-aliasing"),
             color_attachments: &attachments,

@@ -134,7 +134,7 @@ fn every_empty_prepare_observes_device_replacement_and_refuses_until_actual_star
 
 #[test]
 fn shared_hand_device_observation_handles_wrap_and_fail_closed_unknown_gap() {
-    use bevy::ecs::change_detection::{MAX_CHANGE_AGE, Tick};
+    use bevy::ecs::change_detection::{Tick, MAX_CHANGE_AGE};
     let mut observation = DeviceObservation::new(Tick::new(u32::MAX - 2));
     assert!(observation.observe(Tick::new(u32::MAX - 3), Tick::new(1), true));
     assert!(observation.observe(Tick::new(u32::MAX - 3), Tick::new(2), true));
@@ -627,7 +627,7 @@ fn same_hand_token_reallocates_only_private_depth_when_internal_resolution_chang
         render::{
             camera::{CameraMainPassTextureFormats, ExtractedCamera},
             texture::{OutputColorAttachment, TextureCache},
-            view::{RetainedViewEntity, ViewTargetAttachments, prepare_view_targets},
+            view::{prepare_view_targets, RetainedViewEntity, ViewTargetAttachments},
         },
     };
     let Some(mut world) = native_hand_world() else {
@@ -648,6 +648,7 @@ fn same_hand_token_reallocates_only_private_depth_when_internal_resolution_chang
         format: render_scene::SCENE_COLOR_FORMAT,
         usage: TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let target = RenderTarget::Window(bevy::window::WindowRef::Entity(token.owner))
         .normalize(None)

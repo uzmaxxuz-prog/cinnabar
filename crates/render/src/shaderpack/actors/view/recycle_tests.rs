@@ -1,11 +1,11 @@
 use super::*;
-use crate::shaderpack::actors::{RigBuffers, RigInstance, skin};
+use crate::shaderpack::actors::{skin, RigBuffers, RigInstance};
 use crate::shaderpack::effects::textures::release_tests::app;
 use crate::shaderpack::plugin::ShaderPackViews;
 use bevy::render::{
-    RenderApp,
     render_resource::Buffer,
     renderer::{RenderDevice, RenderQueue},
+    RenderApp,
 };
 
 /// One composed actor with storage buffers sufficient for the no-op device.
@@ -108,6 +108,7 @@ fn returning_composition_rebuilds_retained_bind_groups() {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     }));
     let buffer = Buffer::from(device.create_buffer(&wgpu::BufferDescriptor {
         label: None,

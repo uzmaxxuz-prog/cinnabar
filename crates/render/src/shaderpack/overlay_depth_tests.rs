@@ -22,6 +22,7 @@ fn nametag_depth_restores_pack_projection_and_flips_only_the_viewport() {
             format: wgpu::TextureFormat::Depth32Float,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let pack = depth(

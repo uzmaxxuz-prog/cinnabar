@@ -23,14 +23,14 @@ struct VertexOutput {
     @builtin(position) @invariant position: vec4<f32>,
     @location(0) offset: vec3<f32>,
     @location(1) cell: vec2<f32>,
-    @location(2) @interpolate(flat) light: vec3<f32>,
-    @location(3) @interpolate(flat) layer: u32,
-    @location(4) @interpolate(flat) shade: f32,
+    @location(2) @interpolate(flat, either) light: vec3<f32>,
+    @location(3) @interpolate(flat, either) layer: u32,
+    @location(4) @interpolate(flat, either) shade: f32,
     // Coarser tiles hide per fragment over near columns: the tile origin in blocks, the
     // owning block relative to it, and whether to test at all.
-    @location(5) @interpolate(flat) origin: vec2<i32>,
+    @location(5) @interpolate(flat, either) origin: vec2<i32>,
     @location(6) owner_block: vec2<f32>,
-    @location(7) @interpolate(flat) coarse: u32,
+    @location(7) @interpolate(flat, either) coarse: u32,
 }
 
 fn near_column(column: vec2<i32>) -> bool {

@@ -12,11 +12,11 @@ use bevy::{
 };
 
 use super::{
+    model::{args_region, count_index, region_draws, CullPhase, CullStream, STREAM_COUNT},
     GpuCull, GpuCullFrame, GpuCullSubmission,
-    model::{CullPhase, CullStream, STREAM_COUNT, args_region, count_index, region_draws},
 };
 use crate::chunk::*;
-use crate::gpu_timing::{SectionSpan, compute_pass_timestamps, within_span};
+use crate::gpu_timing::{compute_pass_timestamps, within_span, SectionSpan};
 use render_scene::RuntimeStage;
 
 /// Draws one stream's compacted args for one phase of the GPU-culled view.
@@ -236,7 +236,7 @@ pub(crate) fn late_cull(
         SectionSpan::claim(world, "late cull dispatch"),
         SectionSpan::claim(world, "late cull draws"),
     ];
-    let colour = scene_target.color_attachment(target, false);
+    let colour = scene_target.color_attachment(render_context.command_encoder(), target, false);
     let raster_depth = crate::scene_sampling::view_depth(depth).clone();
     let depth = depth.get_attachment(StoreOp::Store);
     let timestamps = crate::gpu_timing::render_pass_timestamps(

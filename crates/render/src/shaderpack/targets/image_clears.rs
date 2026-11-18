@@ -106,6 +106,7 @@ mod tests {
                 format,
                 usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             });
             let texel_bytes = format.block_copy_size(None).unwrap();
             let count = size.into_iter().product::<u32>();

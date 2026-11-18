@@ -47,19 +47,23 @@ pub(crate) fn enhanced_snapshot(
     let diagnostics = diagnostics.as_deref();
     let span = diagnostics.time_span(context.command_encoder(), "enhanced opaque snapshot");
     if scene.texture.sample_count() > 1 {
+        let attachments = [Some(scene.resolve_attachment(
+            context.command_encoder(),
+            &colour.default_view,
+            wgpu::StoreOp::Store,
+        ))];
         let _pass = context
             .command_encoder()
             .begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("enhanced opaque colour resolve"),
-                color_attachments: &[Some(
-                    scene.resolve_attachment(&colour.default_view, wgpu::StoreOp::Store),
-                )],
+                color_attachments: &attachments,
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
     } else {
+        scene.canonical_texture(context.command_encoder());
         context.command_encoder().copy_texture_to_texture(
             scene.texture.as_image_copy(),
             colour.texture.as_image_copy(),

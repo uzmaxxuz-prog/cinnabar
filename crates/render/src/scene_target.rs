@@ -21,10 +21,19 @@ use bevy::{
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 
+/// The attachment interpretation whose physical bytes currently own the scene.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Encoding {
+    Linear,
+    Encoded,
+}
+
 /// Compatible views share every colour sample across linear and encoded material passes.
 #[derive(Component)]
 pub(crate) struct SceneTarget {
     pub(crate) texture: Texture,
+    encoded_texture: Option<Texture>,
+    encoded_authoritative: AtomicBool,
     encoded: TextureView,
     linear: TextureView,
     format: TextureFormat,
@@ -41,7 +50,14 @@ impl SceneTarget {
         samples: u32,
     ) -> Option<Self> {
         let encoded_format = format.remove_srgb_suffix();
-        let view_formats = (format != encoded_format).then_some([format]);
+        let split = format != encoded_format
+            && !device.downlevel_flags().contains(wgpu::DownlevelFlags::VIEW_FORMATS);
+        // Raw transfers cannot preserve multisample coverage between physical allocations.
+        if split && samples != 1 {
+            return None;
+        }
+        let physical_format = if split { format } else { encoded_format };
+        let view_formats = (!split && format != encoded_format).then_some([format]);
         let bytes = u64::from(size.width)
             * u64::from(size.height)
             * u64::from(samples)
@@ -54,7 +70,7 @@ impl SceneTarget {
                     mip_level_count: 1,
                     sample_count: samples,
                     dimension: TextureDimension::D2,
-                    format: encoded_format,
+                    format: physical_format,
                     usage: TextureUsages::RENDER_ATTACHMENT
                         | if samples == 1 {
                             TextureUsages::COPY_SRC | TextureUsages::COPY_DST
@@ -62,15 +78,35 @@ impl SceneTarget {
                             TextureUsages::empty()
                         },
                     view_formats: view_formats.as_ref().map_or(&[], |formats| formats),
+                    texture_binding_view_dimension: None,
                 })
             })?;
-        let encoded = texture.create_view(&TextureViewDescriptor::default());
+        let encoded_texture = if split {
+            Some(crate::gpu_allocation::checked(device, "encoded main-pass colour", bytes, || {
+                device.create_texture(&TextureDescriptor {
+                    label: Some("encoded main-pass colour"),
+                    size,
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: TextureDimension::D2,
+                    format: encoded_format,
+                    usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC | TextureUsages::COPY_DST,
+                    view_formats: &[],
+                    texture_binding_view_dimension: None,
+                })
+            })?)
+        } else {
+            None
+        };
+        let encoded = encoded_texture.as_ref().unwrap_or(&texture).create_view(&TextureViewDescriptor::default());
         let linear = texture.create_view(&TextureViewDescriptor {
             format: Some(format),
             ..default()
         });
         Some(Self {
             texture,
+            encoded_texture,
+            encoded_authoritative: AtomicBool::new(false),
             encoded,
             linear,
             format,
@@ -90,14 +126,53 @@ impl SceneTarget {
         self.format
     }
 
-    /// Selects the material's blend colour space without changing the underlying samples.
+    /// Selects a view for extent queries or full clears; Load passes must prepare its encoding.
     pub(crate) fn color_view(&self, encoded: bool) -> &TextureView {
         if encoded { &self.encoded } else { &self.linear }
+    }
+
+    /// Copies bytes, not colors, at the command-stream boundary where their interpretation changes.
+    fn prepare_encoding(
+        &self,
+        encoder: &mut CommandEncoder,
+        desired: Encoding,
+        load: LoadOp<wgpu::Color>,
+    ) {
+        let encoded = desired == Encoding::Encoded;
+        let previous = self.encoded_authoritative.swap(encoded, Ordering::Relaxed);
+        if previous == encoded || matches!(load, LoadOp::Clear(_)) {
+            return;
+        }
+        if let Some(companion) = &self.encoded_texture {
+            let (source, destination) = if encoded {
+                (&self.texture, companion)
+            } else {
+                (companion, &self.texture)
+            };
+            encoder.copy_texture_to_texture(
+                source.as_image_copy(),
+                destination.as_image_copy(),
+                self.texture.size(),
+            );
+        }
+    }
+
+    /// Makes the canonical allocation current immediately before a sample or raw-copy read.
+    pub(crate) fn canonical_texture(&self, encoder: &mut CommandEncoder) -> &Texture {
+        self.prepare_encoding(encoder, Encoding::Linear, LoadOp::Load);
+        &self.texture
+    }
+
+    /// Records a completed external restore into the canonical allocation.
+    pub(crate) fn canonical_written(&self) {
+        self.encoded_authoritative.store(false, Ordering::Relaxed);
+        self.resolved.store(false, Ordering::Relaxed);
     }
 
     /// Bevy owns the first-clear flag; subsequent world passes load these same colour samples.
     pub(crate) fn color_attachment<'a>(
         &'a self,
+        encoder: &mut CommandEncoder,
         target: &ViewTarget,
         encoded: bool,
     ) -> RenderPassColorAttachment<'a> {
@@ -119,16 +194,23 @@ impl SceneTarget {
                 a: colour.alpha.into(),
             });
         }
-        self.attachment(encoded, load, None)
+        self.attachment(encoder, encoded, load, None)
     }
 
     /// A resolve consumes the final colour samples; intermediate passes always retain them.
     fn attachment<'a>(
         &'a self,
+        encoder: &mut CommandEncoder,
         encoded: bool,
         load: LoadOp<wgpu::Color>,
         resolve: Option<&'a TextureView>,
     ) -> RenderPassColorAttachment<'a> {
+        self.prepare_encoding(
+            encoder,
+            if encoded { Encoding::Encoded } else { Encoding::Linear },
+            load,
+        );
+        self.resolved.store(false, Ordering::Relaxed);
         RenderPassColorAttachment {
             view: self.color_view(encoded),
             depth_slice: None,
@@ -147,10 +229,11 @@ impl SceneTarget {
     /// A colour-reading consumer may resolve without discarding samples still needed by geometry.
     pub(crate) fn resolve_attachment<'a>(
         &'a self,
+        encoder: &mut CommandEncoder,
         destination: &'a TextureView,
         store: StoreOp,
     ) -> RenderPassColorAttachment<'a> {
-        let mut attachment = self.attachment(false, LoadOp::Load, Some(destination));
+        let mut attachment = self.attachment(encoder, false, LoadOp::Load, Some(destination));
         attachment.ops.store = store;
         attachment
     }
@@ -158,10 +241,12 @@ impl SceneTarget {
     /// The last ordinary draw resolves directly and makes the separate end boundary a no-op.
     pub(crate) fn final_attachment<'a>(
         &'a self,
+        encoder: &mut CommandEncoder,
         destination: &'a TextureView,
     ) -> RenderPassColorAttachment<'a> {
+        let attachment = self.resolve_attachment(encoder, destination, StoreOp::Discard);
         self.resolved.store(true, Ordering::Relaxed);
-        self.resolve_attachment(destination, StoreOp::Discard)
+        attachment
     }
 
     /// Lets overlays continue drawing after an effect has restored the scene colour.
@@ -180,6 +265,7 @@ impl SceneTarget {
             return;
         }
         if self.texture.sample_count() == 1 {
+            self.canonical_texture(context.command_encoder());
             context.command_encoder().copy_texture_to_texture(
                 self.texture.as_image_copy(),
                 target.main_texture().as_image_copy(),
@@ -188,7 +274,7 @@ impl SceneTarget {
             self.resolved.store(true, Ordering::Relaxed);
             return;
         }
-        let attachments = [Some(self.final_attachment(target.main_texture_view()))];
+        let attachments = [Some(self.final_attachment(context.command_encoder(), target.main_texture_view()))];
         context
             .command_encoder()
             .begin_render_pass(&RenderPassDescriptor {
@@ -324,6 +410,7 @@ pub(crate) fn unavailable(world: &World, view: Entity) -> bool {
 pub(crate) fn retained_color_attachment<'a>(
     world: &'a World,
     view: Entity,
+    encoder: &mut CommandEncoder,
     target: &'a bevy::render::view::ViewTarget,
     encoded: bool,
 ) -> Option<RenderPassColorAttachment<'a>> {
@@ -332,7 +419,7 @@ pub(crate) fn retained_color_attachment<'a>(
     }
     Some(world.get::<SceneTarget>(view).map_or_else(
         || target.get_color_attachment(),
-        |scene| scene.color_attachment(target, encoded),
+        |scene| scene.color_attachment(encoder, target, encoded),
     ))
 }
 
@@ -365,7 +452,7 @@ type SceneTargetView<'a> = (
     Option<&'a SceneTarget>,
 );
 
-/// Keeps one bounded colour allocation per camera and drops stale camera resources.
+/// Keeps bounded scene colour allocations per camera and drops stale camera resources.
 pub(crate) fn prepare_scene_targets(
     mut commands: Commands,
     device: Res<RenderDevice>,

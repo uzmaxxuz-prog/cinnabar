@@ -16,7 +16,7 @@ const BOLT_COLOUR: vec3<f32> = vec3(0.85, 0.9, 1.0);
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) across: f32,
-    @location(1) @interpolate(flat) intensity: f32,
+    @location(1) @interpolate(flat, either) intensity: f32,
 }
 
 fn corner_uv(corner_index: u32) -> vec2<f32> {

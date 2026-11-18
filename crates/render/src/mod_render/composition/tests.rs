@@ -142,6 +142,7 @@ fn texture(
             | TextureUsages::RENDER_ATTACHMENT
             | TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     queue.profiled_write_texture(
         texture.as_image_copy(),
@@ -243,6 +244,7 @@ fn composed(
             | TextureUsages::COPY_SRC
             | TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let output_view = output.create_view(&default());
     let mut style_gpu = StyleGpu::new(&device, None).unwrap();

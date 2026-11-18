@@ -2,13 +2,13 @@ use bevy::{
     app::SubApp,
     prelude::*,
     render::{
-        Render, RenderSystems,
         camera::ExtractedCamera,
         renderer::RenderDevice,
         view::{
+            window::{create_surfaces, ExtractedWindow, SurfaceData},
             ViewTarget,
-            window::{ExtractedWindow, SurfaceData, create_surfaces},
         },
+        Render, RenderSystems,
     },
 };
 
@@ -150,8 +150,8 @@ mod tests {
                 renderer::RenderDevice,
                 texture::{OutputColorAttachment, TextureCache},
                 view::{
-                    ExtractedView, Msaa, RetainedViewEntity, ViewTargetAttachments,
-                    cleanup_view_targets_for_resize, prepare_view_targets,
+                    cleanup_view_targets_for_resize, prepare_view_targets, ExtractedView, Msaa,
+                    RetainedViewEntity, ViewTargetAttachments,
                 },
             },
         };
@@ -174,6 +174,7 @@ mod tests {
             format: wgpu::TextureFormat::Bgra8UnormSrgb,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let output = TextureView::from(texture.create_view(&Default::default()));
         let target: NormalizedRenderTarget =

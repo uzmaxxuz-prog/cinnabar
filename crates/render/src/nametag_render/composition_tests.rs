@@ -27,6 +27,7 @@ fn custom_label_colour_matches_each_attachment_colour_space() {
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         },
         wgpu::util::TextureDataOrder::LayerMajor,
         &[255; 4],
@@ -116,6 +117,7 @@ fn coplanar_sneaking_shadow_never_rejects_the_following_glyph() {
         format: TextureFormat::Rgba8Unorm,
         usage: TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let atlas = texture.create_view(&default());
     let sampler = gpu.device.create_sampler(&default());

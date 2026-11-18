@@ -22,6 +22,7 @@ fn displaced_models_preserve_opaque_texels_and_cutout_thresholds() {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
     });
     let pixels: Vec<_> = [0, 127, 128, 255]
         .into_iter()

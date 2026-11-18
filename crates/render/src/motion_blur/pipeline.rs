@@ -1,4 +1,4 @@
-use super::{SHADER, history::ExposureUniform};
+use super::{history::ExposureUniform, SHADER};
 use bevy::{
     prelude::*,
     render::{render_resource::*, renderer::RenderDevice},
@@ -61,6 +61,7 @@ impl BlurPipeline {
                     format: crate::actor_render::motion::MOTION_FORMAT,
                     usage: TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT,
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 });
                 let view = texture.create_view(&Default::default());
                 (texture, view)

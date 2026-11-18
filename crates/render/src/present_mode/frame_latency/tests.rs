@@ -2,7 +2,7 @@ use super::*;
 use bevy::{
     camera::{NormalizedRenderTarget, RenderTarget},
     ecs::system::RunSystemOnce,
-    render::{MainWorld, texture::OutputColorAttachment, view::window::ExtractedWindow},
+    render::{texture::OutputColorAttachment, view::window::ExtractedWindow, MainWorld},
     window::{RawHandleWrapper, WindowRef, WindowWrapper},
 };
 use wgpu::rwh::{self, HasDisplayHandle, HasWindowHandle};
@@ -68,6 +68,7 @@ fn worlds(initial: NonZeroU32) -> (World, Entity, NormalizedRenderTarget) {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = texture.create_view(&Default::default());
     extracted.swap_chain_texture_view = Some(view.clone());

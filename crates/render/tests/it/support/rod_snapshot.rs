@@ -112,6 +112,7 @@ fn atlas(gpu: &Gpu, assets: &assets::RuntimeAssets) -> wgpu::TextureView {
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
+        texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
     });
     gpu.queue.write_texture(
         texture.as_image_copy(),

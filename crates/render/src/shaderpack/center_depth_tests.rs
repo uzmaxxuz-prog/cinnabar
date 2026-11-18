@@ -134,6 +134,7 @@ fn gpu_entity_depth_at_the_centre_drives_the_smoothed_value() {
         format: wgpu::TextureFormat::Depth32Float,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = depth.create_view(&Default::default());
     // Stands in for an entity's fragments: `entity` at the centre texel, terrain at 0.5

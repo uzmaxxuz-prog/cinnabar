@@ -61,6 +61,7 @@ impl MediaTexture {
                     format: TextureFormat::Rgba8UnormSrgb,
                     usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING,
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 })
             })
         })?;

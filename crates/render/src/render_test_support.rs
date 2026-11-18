@@ -12,13 +12,47 @@ use bevy::{
     },
 };
 
+/// Installs Bevy's manual renderer so fixture devices retain their actual adapter profile.
+pub(crate) fn profiled_device(
+    instance: &wgpu::Instance,
+    adapter: &wgpu::Adapter,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+) -> RenderDevice {
+    use bevy::render::{
+        renderer::{RenderAdapter, RenderAdapterInfo, RenderInstance, RenderQueue},
+        settings::RenderCreation,
+        RenderPlugin,
+    };
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins)
+        .add_plugins(bevy::window::WindowPlugin {
+            primary_window: None,
+            ..default()
+        })
+        .add_plugins(bevy::asset::AssetPlugin::default())
+        .add_plugins(RenderPlugin {
+            render_creation: RenderCreation::manual(
+                RenderDevice::new(device),
+                RenderQueue::new(queue),
+                RenderAdapterInfo::new(adapter.get_info()),
+                RenderAdapter::new(adapter.clone()),
+                RenderInstance::new(instance.clone()),
+            ),
+            synchronous_pipeline_compilation: true,
+            ..default()
+        });
+    app.finish();
+    app.world().resource::<RenderDevice>().clone()
+}
+
 /// Installs a render owner and its startup systems on `device` without a window or submission.
 pub(crate) fn owner_app(device: RenderDevice, queue: wgpu::Queue, plugin: impl Plugin) -> App {
     use bevy::{
         core_pipeline::core_3d::{Opaque3d, Transparent3d},
         render::{
-            ExtractSchedule, Render, RenderApp, RenderStartup, render_phase::DrawFunctions,
-            render_resource::PipelineCache, renderer::RenderGraph, renderer::RenderQueue,
+            render_phase::DrawFunctions, render_resource::PipelineCache, renderer::RenderGraph,
+            renderer::RenderQueue, ExtractSchedule, Render, RenderApp, RenderStartup,
         },
     };
     let mut render_app = SubApp::new();

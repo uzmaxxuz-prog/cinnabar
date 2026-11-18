@@ -166,6 +166,7 @@ fn upload(
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             // Shader packs read the stored gamma bytes through an `Rgba8Unorm` view.
             view_formats: raw_views.view_formats(),
+            texture_binding_view_dimension: None,
         },
     )?;
     gpu_allocation::checked(device, "particle atlas upload", pixels.len() as u64, || {

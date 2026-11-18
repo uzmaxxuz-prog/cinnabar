@@ -4,17 +4,16 @@ use bevy::prelude::IntoScheduleConfigs;
 use bevy::render::render_phase::AddRenderCommand;
 use bevy::{
     asset::{load_internal_asset, uuid_handle},
-    core_pipeline::core_3d::{CORE_3D_DEPTH_FORMAT, Transparent3d},
+    core_pipeline::core_3d::{Transparent3d, CORE_3D_DEPTH_FORMAT},
     ecs::{
         query::{Has, ROQueryItem},
-        system::{SystemParamItem, lifetimeless::SRes},
+        system::{lifetimeless::SRes, SystemParamItem},
     },
     prelude::{
-        App, BevyError, Commands, Entity, FromWorld, Handle, Msaa, Plugin, Query, Res, ResMut,
-        Resource, Result, Shader, World, default, warn,
+        default, warn, App, BevyError, Commands, Entity, FromWorld, Handle, Msaa, Plugin, Query,
+        Res, ResMut, Resource, Result, Shader, World,
     },
     render::{
-        Render, RenderApp, RenderStartup, RenderSystems,
         extract_resource::ExtractResourcePlugin,
         render_phase::{
             DrawFunctions, PhaseItem, PhaseItemExtraIndex, RenderCommand, RenderCommandResult,
@@ -35,11 +34,12 @@ use bevy::{
         renderer::{RenderContext, RenderDevice, RenderQueue},
         sync_world::MainEntity,
         view::{ExtractedView, ViewTarget},
+        Render, RenderApp, RenderStartup, RenderSystems,
     },
 };
 use render_scene::screen_overlay_portal::PortalTexture;
 use render_scene::{ChunkAnimationClock, ChunkTextureAssetIdentity, ChunkTextureAssets};
-use render_scene::{MAX_SCREEN_OVERLAY_LAYERS, SCREEN_OVERLAY_TEXTURE_SIDE, ScreenOverlayScene};
+use render_scene::{ScreenOverlayScene, MAX_SCREEN_OVERLAY_LAYERS, SCREEN_OVERLAY_TEXTURE_SIDE};
 use std::collections::HashMap;
 
 const OVERLAY_SHADER_HANDLE: Handle<Shader> = uuid_handle!("2f6d4c1a-8b73-4e0c-a5d9-61c7b3e8f204");
@@ -152,6 +152,7 @@ fn texture_array(
             format: TextureFormat::Rgba8UnormSrgb,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             view_formats: &[],
+            texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
         },
         TextureDataOrder::LayerMajor,
         pixels,

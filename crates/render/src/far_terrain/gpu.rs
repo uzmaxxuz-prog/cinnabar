@@ -645,6 +645,7 @@ fn colour_texture(device: &RenderDevice, layers: u32) -> (Texture, TextureView) 
         format: TextureFormat::Rgba8Unorm,
         usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST | TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
     });
     let view = texture.create_view(&TextureViewDescriptor {
         dimension: Some(TextureViewDimension::D2Array),

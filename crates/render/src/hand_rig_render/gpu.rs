@@ -424,6 +424,7 @@ pub(super) fn upload_skin(
             format: TextureFormat::Rgba8UnormSrgb,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             view_formats: gpu.raw_views.view_formats(),
+            texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
         },
         TextureDataOrder::LayerMajor,
         &frame.skin,
@@ -495,6 +496,7 @@ pub(super) fn upload_atlas(
                 format: TextureFormat::Rgba8UnormSrgb,
                 usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
                 view_formats: raw_views.view_formats(),
+                texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
             },
             TextureDataOrder::LayerMajor,
             &atlas.rgba8.joined(),
@@ -567,6 +569,7 @@ pub(super) fn upload_glint(
             format: TextureFormat::Rgba8UnormSrgb,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             view_formats: gpu.raw_views.view_formats(),
+            texture_binding_view_dimension: None,
         },
         TextureDataOrder::LayerMajor,
         data,
@@ -617,6 +620,7 @@ pub(super) fn ensure_depth(
                     format: CORE_3D_DEPTH_FORMAT,
                     usage: TextureUsages::RENDER_ATTACHMENT,
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 })
             })
         })

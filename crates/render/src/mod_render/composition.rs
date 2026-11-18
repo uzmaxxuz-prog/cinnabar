@@ -350,6 +350,7 @@ impl Pyramid {
                     format: TextureFormat::Rgba8Unorm,
                     usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 });
                 let target = texture.create_view(&default());
                 let uniform = device.create_buffer(&BufferDescriptor {

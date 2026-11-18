@@ -123,6 +123,11 @@ fn stem_colours_source() -> String {
 
 pub(crate) fn source(source: &str) -> String {
     source
+        .replace("// CHUNK_STAGE_INTERFACE", include_str!("material_shader/chunk_stage.wesl"))
+        .replace("// ACTOR_STAGE_INTERFACE", include_str!("material_shader/actor_stage.wesl"))
+        .replace("// MODEL_STAGE_INTERFACE", include_str!("material_shader/model_stage.wesl"))
+        .replace("// LIQUID_STAGE_INTERFACE", include_str!("material_shader/liquid_stage.wesl"))
+        .replace("// TRANSPARENT_STAGE_INTERFACE", include_str!("material_shader/transparent_stage.wesl"))
         .replace("CUBE_SEAM_MAX_STEP_VALUE", &format!("{:?}f", render_model::CUBE_SEAM_MAX_STEP))
         .replace("ACTOR_COMPACT_CURRENT_BONE_BASE", &format!("{}u", render_model::actor::MAX_ACTOR_POSE_BONES))
         .replace("TERRAIN_UNIT_QUADS", &format!("{}u", render_model::terrain_units::QUADS_PER_UNIT))

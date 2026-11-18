@@ -6,7 +6,7 @@ use crate::shader_source;
 
 use bevy::math::Vec3;
 use gpu_snapshot::{Draw, Gpu, RasterState};
-use meshing::{CubeQuadLayout, Face, PackedQuad, sub_chunk_facing_faces};
+use meshing::{sub_chunk_facing_faces, CubeQuadLayout, Face, PackedQuad};
 
 const ORIGIN: [i32; 3] = [16, 64, -16];
 const TEXTURE_SIDE: u32 = 16;
@@ -88,6 +88,7 @@ fn texture_pattern(gpu: &Gpu, cutout: bool) -> wgpu::TextureView {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
     });
     let texels = (0..2 * TEXTURE_SIDE * TEXTURE_SIDE)
         .flat_map(|index| {

@@ -1,6 +1,6 @@
 //! Multisampled coverage must not fetch texels beyond an alpha-tested quad.
 
-use crate::gpu_snapshot::{Draw, Gpu, SNAPSHOT_SIDE, save};
+use crate::gpu_snapshot::{save, Draw, Gpu, SNAPSHOT_SIDE};
 use crate::hand_rig_render::bindings::HandFragmentBindings;
 use wgpu::util::DeviceExt;
 
@@ -53,6 +53,7 @@ fn raster(gpu: &Gpu, held: bool) -> wgpu::TextureView {
                 format: wgpu::TextureFormat::Rgba8Unorm,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
+                texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
             },
             wgpu::util::TextureDataOrder::LayerMajor,
             &pixels,

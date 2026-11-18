@@ -78,7 +78,7 @@ pub(crate) fn hand_view<const AFTER_PACK: bool>(
         gate.reject(token);
         return Ok(());
     };
-    let attachments = [Some(scene_target.color_attachment(target, false))];
+    let attachments = [Some(scene_target.color_attachment(context.command_encoder(), target, false))];
     let mut pass = context.begin_tracked_render_pass(RenderPassDescriptor {
         label: Some("camera-local neutral empty hand"),
         color_attachments: &attachments,

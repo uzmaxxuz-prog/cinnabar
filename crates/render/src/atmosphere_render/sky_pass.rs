@@ -89,7 +89,7 @@ fn atmosphere(world: &World, query: ViewQuery<AtmosphereQuery>, mut context: Ren
     };
     let colour = scene.map_or_else(
         || target.get_color_attachment(),
-        |scene| scene.color_attachment(target, false),
+        |scene| scene.color_attachment(context.command_encoder(), target, false),
     );
     let extent = crate::render_bounds::extent(colour.view);
     let viewport = Viewport::from_viewport_and_override(camera.viewport.as_ref(), resolution)

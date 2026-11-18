@@ -47,6 +47,11 @@ input-latch consumption. Other prediction-sync metadata, pose sizes, exact send
 phase and live server acceptance remain incomplete.
 ## Browser release verification
 
+Compatibility texture and scene-transfer fixes are source-written, with regression sources for
+physical mip pairs, retained encoding transitions, array bindings, MSAA preflight and UI RGB/alpha.
+They have not been compiled or run. The public Bevy renderer revision and a consistent lockfile
+are pending; browser and native runtime acceptance remain incomplete. No gate closes here.
+
 Browser target checks and JavaScript edge suites are CI gates. Go and Rust consume
 shared control fixtures, and devtool builds a staged static bundle with the locked
 binding CLI and canonical carrier delivery index. Certificate renewal retains

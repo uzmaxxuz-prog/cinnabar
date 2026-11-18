@@ -25,8 +25,8 @@ struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) color: vec4<f32>,
     @location(1) uv: vec2<f32>,
-    @location(2) @interpolate(flat) textured: u32,
-    @location(3) @interpolate(flat) backface: u32,
+    @location(2) @interpolate(flat, either) textured: u32,
+    @location(3) @interpolate(flat, either) backface: u32,
 }
 
 // Attachments past the actor arena's binding limit stay hidden, like missing actors.

@@ -266,6 +266,7 @@ type ActorViews<'w, 's> = Query<
 >;
 
 pub(super) fn prepare_actor_pipelines(
+    device: Res<RenderDevice>,
     cache: Res<PipelineCache>,
     mut pipeline: ResMut<ActorPipeline>,
     readiness: Res<render_scene::ActorPipelineReadiness>,
@@ -283,8 +284,14 @@ pub(super) fn prepare_actor_pipelines(
                 .and_then(|request| request.for_view(camera.hdr, enhanced.is_some())),
             world_camera,
             shader_pack,
+            device.is_webgpu_compatibility(),
         );
-        let counts = std::iter::once(*msaa).chain(requested);
+        let current = if device.is_webgpu_compatibility() {
+            Msaa::Off
+        } else {
+            *msaa
+        };
+        let counts = std::iter::once(current).chain(requested);
         for msaa in counts.flat_map(crate::pipeline_warmup::sample_modes) {
             ready &= pipeline
                 .prewarm(&cache, msaa, camera.hdr, enhanced.is_some())

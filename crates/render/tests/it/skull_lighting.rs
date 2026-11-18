@@ -7,7 +7,7 @@ use bevy::math::{Mat4, Vec3};
 use gpu_snapshot::{Draw, Gpu, SNAPSHOT_SIDE};
 use render_model::{
     BlockEntityKind, BlockEntityLight, BlockEntityScene, BlockEntitySubmission, LightmapInputs,
-    MIN_DYNAMIC_ATLAS_WIDTH, SceneClock, SkullKind, SkullModel, SkullMount,
+    SceneClock, SkullKind, SkullModel, SkullMount, MIN_DYNAMIC_ATLAS_WIDTH,
 };
 
 fn center_pixel() -> usize {
@@ -136,6 +136,7 @@ fn raster_model_from(
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let mut pixels = atlas.static_rgba8.to_vec();
     pixels.resize((atlas.size[0] * atlas.size[1] * 4) as usize, 0);

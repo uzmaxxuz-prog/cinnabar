@@ -1,6 +1,6 @@
 //! Deterministic resource and allocation contracts for the optional exposure pass.
 
-use super::{CameraMotionBlur, pipeline::BlurPipeline, prepare::BlurView};
+use super::{pipeline::BlurPipeline, prepare::BlurView, CameraMotionBlur};
 use bevy::ecs::schedule::ScheduleLabel;
 use bevy::ecs::system::RunSystemOnce;
 
@@ -16,7 +16,7 @@ use bevy::{
         render_resource::*,
         renderer::RenderDevice,
         texture::{CachedTexture, OutputColorAttachment, TextureCache},
-        view::{ViewDepthStencilTexture, ViewTarget, ViewTargetAttachments, prepare_view_targets},
+        view::{prepare_view_targets, ViewDepthStencilTexture, ViewTarget, ViewTargetAttachments},
     },
 };
 
@@ -39,6 +39,7 @@ pub(super) fn fixture() -> (App, Entity) {
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let output = texture(
@@ -331,6 +332,7 @@ fn actor_tile_reduction_bounds_serial_source_work() {
             format: crate::actor_render::motion::MOTION_FORMAT,
             usage: TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
         .create_view(&Default::default());
     let uniform = device.create_buffer(&BufferDescriptor {

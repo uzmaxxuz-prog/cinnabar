@@ -3,7 +3,7 @@
 use crate::gpu_snapshot::Gpu;
 use crate::shader_source;
 use bevy::math::{Mat4, Vec3};
-use render_model::{EntityShadow, EntityShadowParams, SHADOW_VOLUME_VERTICES, shadow_volume_mesh};
+use render_model::{shadow_volume_mesh, EntityShadow, EntityShadowParams, SHADOW_VOLUME_VERTICES};
 use wgpu::util::DeviceExt;
 
 const SIDE: u32 = 64;
@@ -132,6 +132,7 @@ fn render(gpu: &Gpu, casters: &[EntityShadow], samples: u32) -> Vec<u8> {
             format,
             usage,
             view_formats,
+            texture_binding_view_dimension: None,
         })
     };
     let target = texture(

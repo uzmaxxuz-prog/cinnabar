@@ -39,6 +39,7 @@ fn leaf_atlas(gpu: &Gpu) -> wgpu::TextureView {
                 format: wgpu::TextureFormat::Rgba8Unorm,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
+                texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
             },
             wgpu::util::TextureDataOrder::LayerMajor,
             &bytes,

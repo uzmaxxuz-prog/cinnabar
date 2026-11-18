@@ -58,6 +58,7 @@ fn texture(
                 TextureUsages::empty()
             },
         view_formats: &[],
+        texture_binding_view_dimension: None,
     })
 }
 

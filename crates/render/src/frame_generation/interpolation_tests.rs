@@ -1,6 +1,6 @@
 // Adapted from Horizon under the MIT license; see THIRD_PARTY_NOTICES.md.
 
-use super::super::optical_flow::{OpticalFlow, tests as of};
+use super::super::optical_flow::{tests as of, OpticalFlow};
 use super::*;
 
 #[test]
@@ -50,6 +50,7 @@ fn interpolate(
         format: wgpu::TextureFormat::Depth32Float,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let depth = depth.create_view(&Default::default());
     let mut encoder = device.create_command_encoder(&Default::default());
@@ -89,6 +90,7 @@ fn interpolate(
                     | wgpu::TextureUsages::COPY_DST
                     | wgpu::TextureUsages::COPY_SRC,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             });
             queue.write_texture(
                 t.as_image_copy(),
@@ -258,6 +260,7 @@ fn slow_object_motion_survives_native_resolution_normalization() {
             format: wgpu::TextureFormat::Rg32Sint,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let vectors = vec![[2_i32, 0]; (grid[0] * grid[1]) as usize];
         queue.write_texture(

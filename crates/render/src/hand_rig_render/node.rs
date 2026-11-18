@@ -70,9 +70,9 @@ pub(crate) fn hand_rig<const AFTER_PACK: bool>(
     let final_world_draw =
         !(render_model::enhanced_rendering_enabled() && enhanced) && msaa.samples() > 1;
     let attachments = [Some(if final_world_draw {
-        scene_target.final_attachment(target.main_texture_view())
+        scene_target.final_attachment(context.command_encoder(), target.main_texture_view())
     } else {
-        scene_target.color_attachment(target, false)
+        scene_target.color_attachment(context.command_encoder(), target, false)
     })];
     let mut pass = context.begin_tracked_render_pass(RenderPassDescriptor {
         label: Some("first-person animated rig"),

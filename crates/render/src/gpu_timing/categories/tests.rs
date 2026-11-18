@@ -2,7 +2,7 @@ use super::*;
 use bevy::{
     asset::AssetId,
     core_pipeline::core_3d::{Opaque3dBatchSetKey, Opaque3dBinKey},
-    prelude::{Mesh, default},
+    prelude::{default, Mesh},
     render::{
         batching::gpu_preprocessing::GpuPreprocessingMode,
         render_phase::{
@@ -135,6 +135,7 @@ fn non_mesh_execution_keeps_every_existing_bin_and_entity_order() {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let target = texture.create_view(&Default::default());
     let mut encoder = device.create_command_encoder(&Default::default());

@@ -1,6 +1,132 @@
 use super::*;
 use bevy::ecs::schedule::ScheduleLabel;
 
+/// Raw transitions retain RGB and alpha across canonical reads, retained frames and full clears.
+#[test]
+fn paired_colour_transitions_preserve_bytes_and_retained_authority() {
+    let Some((device, queue, _)) = fixture() else {
+        return;
+    };
+    // A bare device deliberately has no VIEW_FORMATS capability.
+    let device = RenderDevice::new(device.wgpu_device().clone());
+    let scene = SceneTarget::new(&device, size(), TextureFormat::Rgba8UnormSrgb, 1).unwrap();
+    assert!(scene.encoded_texture.is_some());
+    let shader = device
+        .wgpu_device()
+        .create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("encoded Load blending witness"),
+            source: wgpu::ShaderSource::Wgsl(
+                r#"
+@vertex fn vertex(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
+    let xy = vec2<f32>(f32((i << 1u) & 2u), f32(i & 2u));
+    return vec4<f32>(xy * 2.0 - vec2<f32>(1.0), 0.0, 1.0);
+}
+@fragment fn fragment() -> @location(0) vec4<f32> { return vec4<f32>(0.2, 0.4, 0.7, 0.31); }
+"#
+                .into(),
+            ),
+        });
+    let blend = pipeline(
+        &device,
+        &shader,
+        TextureFormat::Rgba8Unorm,
+        1,
+        "fragment",
+        Some(wgpu::BlendState::ALPHA_BLENDING),
+    );
+    let mut expected = [89_u8, 137, 203, 94];
+    let mut encoder = device.create_command_encoder(&Default::default());
+    let colour = wgpu::Color {
+        r: 0.1,
+        g: 0.25,
+        b: 0.6,
+        a: 0.37,
+    };
+    {
+        let attachments = [Some(scene.attachment(
+            &mut encoder,
+            false,
+            LoadOp::Clear(colour),
+            None,
+        ))];
+        let _pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            color_attachments: &attachments,
+            ..Default::default()
+        });
+    }
+    for next_frame in [false, true] {
+        for _ in 0..2 {
+            let attachments = [Some(scene.attachment(
+                &mut encoder,
+                true,
+                LoadOp::Load,
+                None,
+            ))];
+            {
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    color_attachments: &attachments,
+                    ..Default::default()
+                });
+                pass.set_pipeline(&blend);
+                pass.draw(0..3, 0..1);
+            }
+            for (index, channel) in expected.iter_mut().enumerate() {
+                let source = [0.2, 0.4, 0.7, 1.0][index] * 255.0;
+                *channel = (source * 0.31 + f32::from(*channel) * 0.69).round() as u8;
+            }
+            let texture = scene.canonical_texture(&mut encoder);
+            let actual = read_pixel(&device, &queue, encoder, texture);
+            assert!(
+                actual.iter().zip(expected).all(|(a, b)| a.abs_diff(b) <= 1),
+                "raw RGB/alpha: {actual:?}"
+            );
+            encoder = device.create_command_encoder(&Default::default());
+        }
+        if !next_frame {
+            // The last writer is encoded; begin_frame must not forget which allocation owns it.
+            let attachments = [Some(scene.attachment(
+                &mut encoder,
+                true,
+                LoadOp::Load,
+                None,
+            ))];
+            {
+                let _pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    color_attachments: &attachments,
+                    ..Default::default()
+                });
+            }
+            scene.begin_frame();
+        }
+    }
+    {
+        let attachments = [Some(scene.attachment(
+            &mut encoder,
+            true,
+            LoadOp::Clear(wgpu::Color {
+                r: 0.2,
+                g: 0.4,
+                b: 0.7,
+                a: 0.31,
+            }),
+            None,
+        ))];
+        let _pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            color_attachments: &attachments,
+            ..Default::default()
+        });
+    }
+    let texture = scene.canonical_texture(&mut encoder);
+    let actual = read_pixel(&device, &queue, encoder, texture);
+    assert!(
+        actual
+            .iter()
+            .zip([51_u8, 102, 179, 79])
+            .all(|(a, b)| a.abs_diff(b) <= 1),
+        "encoded full clear: {actual:?}"
+    );
+}
+
 /// Requests a headless adapter and initializes the render task pool.
 fn fixture() -> Option<(RenderDevice, wgpu::Queue, wgpu::Adapter)> {
     bevy::tasks::ComputeTaskPool::get_or_init(bevy::tasks::TaskPool::new);
@@ -19,7 +145,9 @@ fn fixture() -> Option<(RenderDevice, wgpu::Queue, wgpu::Adapter)> {
         ..Default::default()
     }))
     .expect("shared scene device");
-    Some((RenderDevice::from(device), queue, adapter))
+    let device =
+        crate::render_test_support::profiled_device(&instance, &adapter, device, queue.clone());
+    Some((device, queue, adapter))
 }
 
 /// Keeps fixture readbacks bounded while exercising multiple fragments and samples.
@@ -48,23 +176,27 @@ fn shared_colour_retains_samples_until_one_discarding_resolve() {
         }
         let scene = SceneTarget::new(&device, size(), format, samples).unwrap();
         let resolved = SceneTarget::new(&device, size(), format, 1).unwrap();
+        let mut encoder = device.create_command_encoder(&Default::default());
         let mut resolves = 0;
         for encoded in [false, true, false, true, false] {
-            let attachment = scene.attachment(encoded, LoadOp::Load, None);
+            let attachment = scene.attachment(&mut encoder, encoded, LoadOp::Load, None);
             assert!(attachment.resolve_target.is_none());
             assert_eq!(attachment.ops.store, StoreOp::Store);
             assert_eq!(scene.texture.sample_count(), samples);
             resolves += usize::from(attachment.resolve_target.is_some());
         }
         if samples > 1 {
-            let final_attachment =
-                scene.resolve_attachment(resolved.color_view(false), StoreOp::Discard);
+            let final_attachment = scene.resolve_attachment(
+                &mut encoder,
+                resolved.color_view(false),
+                StoreOp::Discard,
+            );
             resolves += usize::from(final_attachment.resolve_target.is_some());
             assert_eq!(final_attachment.ops.store, StoreOp::Discard);
             assert_eq!(resolves, 1);
             assert_eq!(scene.texture.usage(), TextureUsages::RENDER_ATTACHMENT);
             assert!(!scene.resolved.load(Ordering::Relaxed));
-            let folded = scene.final_attachment(resolved.color_view(false));
+            let folded = scene.final_attachment(&mut encoder, resolved.color_view(false));
             assert!(folded.resolve_target.is_some());
             assert_eq!(folded.ops.store, StoreOp::Discard);
             assert!(scene.resolved.load(Ordering::Relaxed));
@@ -183,10 +315,15 @@ fn reconstruct_coverage(
         format,
         usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = resolved.create_view(&default());
     {
-        let attachments = [Some(scene.resolve_attachment(&view, StoreOp::Store))];
+        let attachments = [Some(scene.resolve_attachment(
+            context,
+            &view,
+            StoreOp::Store,
+        ))];
         context.begin_render_pass(&RenderPassDescriptor {
             label: Some("coverage reconstruction control resolve"),
             color_attachments: &attachments,
@@ -228,7 +365,7 @@ fn reconstruct_coverage(
             resource: wgpu::BindingResource::TextureView(&view),
         }],
     });
-    let attachments = [Some(scene.attachment(false, LoadOp::Load, None))];
+    let attachments = [Some(scene.attachment(context, false, LoadOp::Load, None))];
     let mut pass = context.begin_render_pass(&RenderPassDescriptor {
         label: Some("coverage reconstruction control draw"),
         color_attachments: &attachments,
@@ -289,7 +426,12 @@ struct Hand { @location(0) colour: vec4f, @builtin(sample_mask) coverage: u32 }
         if reconstruct && index == 1 && samples > 1 {
             reconstruct_coverage(device, &mut context, &scene);
         }
-        let attachments = [Some(scene.attachment(encoded, LoadOp::Load, None))];
+        let attachments = [Some(scene.attachment(
+            &mut context,
+            encoded,
+            LoadOp::Load,
+            None,
+        ))];
         let mut pass = context.begin_render_pass(&RenderPassDescriptor {
             label: Some("shared scene fixture geometry"),
             color_attachments: &attachments,
@@ -302,9 +444,11 @@ struct Hand { @location(0) colour: vec4f, @builtin(sample_mask) coverage: u32 }
         pass.draw(0..3, 0..1);
     }
     let output = if samples > 1 {
-        let attachments = [Some(
-            scene.resolve_attachment(resolved.color_view(false), StoreOp::Discard),
-        )];
+        let attachments = [Some(scene.resolve_attachment(
+            &mut context,
+            resolved.color_view(false),
+            StoreOp::Discard,
+        ))];
         context.begin_render_pass(&RenderPassDescriptor {
             label: Some("shared scene fixture final resolve"),
             color_attachments: &attachments,
@@ -315,7 +459,7 @@ struct Hand { @location(0) colour: vec4f, @builtin(sample_mask) coverage: u32 }
         });
         &resolved.texture
     } else {
-        &scene.texture
+        scene.canonical_texture(&mut context)
     };
     read_pixel(device, queue, context, output)
 }
@@ -391,7 +535,7 @@ fn msaa_view_fixture() -> (World, Entity, Schedule) {
             camera::ExtractedCamera,
             texture::{OutputColorAttachment, TextureCache},
             view::{
-                ExtractedView, RetainedViewEntity, ViewTargetAttachments, prepare_view_targets,
+                prepare_view_targets, ExtractedView, RetainedViewEntity, ViewTargetAttachments,
             },
         },
     };
@@ -407,8 +551,9 @@ fn msaa_view_fixture() -> (World, Entity, Schedule) {
         ..wgpu::InstanceDescriptor::new_without_display_handle()
     });
     let adapter = bevy::tasks::block_on(instance.request_adapter(&Default::default())).unwrap();
-    let (device, _) = bevy::tasks::block_on(adapter.request_device(&Default::default())).unwrap();
-    let device = RenderDevice::from(device);
+    let (device, queue) =
+        bevy::tasks::block_on(adapter.request_device(&Default::default())).unwrap();
+    let device = crate::render_test_support::profiled_device(&instance, &adapter, device, queue);
     let mut owned = World::new();
     let world = &mut owned;
     world.insert_resource(device.clone());
@@ -421,6 +566,7 @@ fn msaa_view_fixture() -> (World, Entity, Schedule) {
         format: TextureFormat::Bgra8UnormSrgb,
         usage: TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let target: NormalizedRenderTarget =
         RenderTarget::Window(bevy::window::WindowRef::Entity(Entity::PLACEHOLDER))
@@ -686,9 +832,13 @@ fn retained_passes_refuse_fallback_colour_while_the_msaa_scene_is_unavailable() 
             .sample_count(),
         4
     );
+    let mut encoder = world
+        .resource::<RenderDevice>()
+        .create_command_encoder(&Default::default());
     for encoded in [false, true] {
         let target = world.get::<ViewTarget>(view).unwrap();
-        let attachment = retained_color_attachment(&world, view, target, encoded).unwrap();
+        let attachment =
+            retained_color_attachment(&world, view, &mut encoder, target, encoded).unwrap();
         assert!(std::ptr::eq(
             attachment.view,
             &**world.get::<SceneTarget>(view).unwrap().color_view(encoded)
@@ -699,19 +849,18 @@ fn retained_passes_refuse_fallback_colour_while_the_msaa_scene_is_unavailable() 
         .remove::<SceneTarget>()
         .insert(SceneTargetUnavailable);
     for encoded in [false, true] {
-        assert!(
-            retained_color_attachment(
-                &world,
-                view,
-                world.get::<ViewTarget>(view).unwrap(),
-                encoded
-            )
-            .is_none()
-        );
+        assert!(retained_color_attachment(
+            &world,
+            view,
+            &mut encoder,
+            world.get::<ViewTarget>(view).unwrap(),
+            encoded
+        )
+        .is_none());
     }
     world.entity_mut(view).remove::<SceneTargetUnavailable>();
     let target = world.get::<ViewTarget>(view).unwrap();
-    let attachment = retained_color_attachment(&world, view, target, false).unwrap();
+    let attachment = retained_color_attachment(&world, view, &mut encoder, target, false).unwrap();
     assert!(std::ptr::eq(
         attachment.view,
         target.get_color_attachment().view

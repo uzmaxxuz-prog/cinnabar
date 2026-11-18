@@ -15,10 +15,10 @@ use bevy::{
     render::{
         camera::ExtractedCamera,
         texture::{OutputColorAttachment, TextureCache},
-        view::{ViewTargetAttachments, prepare_view_targets},
+        view::{prepare_view_targets, ViewTargetAttachments},
     },
 };
-use render_model::{UI_BLEND_ALPHA, UiScissor, UiTextureCatalog, UiTexturePage};
+use render_model::{UiScissor, UiTextureCatalog, UiTexturePage, UI_BLEND_ALPHA};
 use render_scene::{UiRenderSceneResource, UiRenderStatsResource};
 
 const SIZE: [u32; 2] = [64, 32];
@@ -40,6 +40,7 @@ fn view_world() -> (World, Entity) {
         format: TextureFormat::Bgra8UnormSrgb,
         usage: TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let target: NormalizedRenderTarget =
         RenderTarget::Window(bevy::window::WindowRef::Entity(Entity::PLACEHOLDER))

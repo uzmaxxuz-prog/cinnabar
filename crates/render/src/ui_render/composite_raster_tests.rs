@@ -29,6 +29,7 @@ fn composite_entry(ui: &[[u8; 4]], scene: &[[f32; 4]], entry: &str) -> Option<Ve
                 format,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             },
             wgpu::util::TextureDataOrder::LayerMajor,
             bytes,
@@ -48,6 +49,7 @@ fn composite_entry(ui: &[[u8; 4]], scene: &[[f32; 4]], entry: &str) -> Option<Ve
         format: wgpu::TextureFormat::Rgba32Float,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let entries = [0, 1].map(|binding| wgpu::BindGroupLayoutEntry {
         binding,

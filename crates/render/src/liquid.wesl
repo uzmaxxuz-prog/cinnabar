@@ -68,6 +68,8 @@ struct VertexOutput {
     @location(11) @interpolate(flat) surface_class: u32,
 }
 
+// LIQUID_STAGE_INTERFACE
+
 fn animation_sample(material: MaterialGpu) -> FrameSample {
     if (material.animation == 0xffffffffu) {
         return FrameSample(material.texture, material.texture, 0.0);
@@ -187,14 +189,14 @@ fn liquid_record(instance_index: u32) -> u32 {
 fn vertex_unit(
     @builtin(vertex_index) vertex_index: u32,
     @builtin(instance_index) instance_index: u32,
-) -> VertexOutput {
+) -> StageOutput {
     // Header locates packed visibility references beside stable descriptor slots.
     let unit_index = instance_index * TERRAIN_UNITS_PER_INSTANCE
         + vertex_index / (TERRAIN_UNIT_QUADS * 4u);
     if (unit_index >= terrain_units[0].y) {
         var invisible: VertexOutput;
         invisible.clip_position = vec4(2.0, 2.0, 2.0, 1.0);
-        return invisible;
+        return pack_stage(invisible);
     }
     let references = terrain_units[0].x;
     let slot = terrain_units[references + unit_index / 4u][unit_index % 4u];
@@ -203,9 +205,9 @@ fn vertex_unit(
     if (quad >= unit.y || unit.w != 0u) {
         var invisible: VertexOutput;
         invisible.clip_position = vec4(2.0, 2.0, 2.0, 1.0);
-        return invisible;
+        return pack_stage(invisible);
     }
-    return depth_vertex(unit.z * 4u + vertex_index % 4u, unit.x + quad);
+    return pack_stage(depth_vertex(unit.z * 4u + vertex_index % 4u, unit.x + quad));
 }
 
 // Fetches the vertex index and first instance from vertex buffer 0, as `chunk.wesl` describes.
@@ -213,8 +215,8 @@ fn vertex_unit(
 fn vertex_depth(
     @location(0) offsets: vec2<u32>,
     @builtin(instance_index) instance_index: u32,
-) -> VertexOutput {
-    return depth_vertex(offsets.x, offsets.y + instance_index);
+) -> StageOutput {
+    return pack_stage(depth_vertex(offsets.x, offsets.y + instance_index));
 }
 
 fn depth_vertex(vertex_index: u32, instance_index: u32) -> VertexOutput {
@@ -410,7 +412,8 @@ in: VertexOutput) -> vec3<f32> {
 }
 
 @fragment
-fn fragment(in: VertexOutput, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
+fn fragment(stage: StageOutput, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
+    let in = unpack_stage(stage);
     return shade_liquid(in, front_facing, dpdx(in.uv), dpdy(in.uv));
 }
 
@@ -456,7 +459,8 @@ fn shade_liquid(in: VertexOutput, front_facing: bool, dx: vec2<f32>, dy: vec2<f3
 }
 
 @fragment
-fn fragment_depth(in: VertexOutput, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
+fn fragment_depth(stage: StageOutput, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
+    let in = unpack_stage(stage);
     if (in.depth_write_route == 0u) { discard; }
     if (!front_facing && in.two_sided == 0u) { discard; }
     let dx = dpdx(in.uv);

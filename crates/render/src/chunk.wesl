@@ -75,14 +75,14 @@ fn select_animation_frames_gpu(material: MaterialGpu) -> AnimationFrameSampleGpu
 struct VertexOutput {
     @builtin(position) @invariant clip_position: vec4<f32>,
     @location(0) uv: vec2<f32>,
-    @location(1) @interpolate(flat) current_texture: u32,
+    @location(1) @interpolate(flat, either) current_texture: u32,
     // Face, extents and UV turn of the quad; see `pack_quad_shape`.
-    @location(2) @interpolate(flat) quad_shape: u32,
-    @location(3) @interpolate(flat) material_flags: u32,
+    @location(2) @interpolate(flat, either) quad_shape: u32,
+    @location(3) @interpolate(flat, either) material_flags: u32,
     @location(4) local_position: vec3<f32>,
-    @location(5) @interpolate(flat) biome_record: u32,
-    @location(6) @interpolate(flat) next_texture: u32,
-    @location(7) @interpolate(flat) frame_blend: f32,
+    @location(5) @interpolate(flat, either) biome_record: u32,
+    @location(6) @interpolate(flat, either) next_texture: u32,
+    @location(7) @interpolate(flat, either) frame_blend: f32,
     @location(8) world_position: vec3<f32>,
     // Only Enhanced shading reads the baked lightmap colour; vanilla samples the
     // native table from `native_light_levels` per fragment.
@@ -93,14 +93,16 @@ struct VertexOutput {
     @if(ENHANCED)
     @location(11) ambient_occlusion: f32,
     @if(ENHANCED)
-    @location(12) @interpolate(flat) surface_class: u32,
+    @location(12) @interpolate(flat, either) surface_class: u32,
     @if(!ENHANCED)
     @location(10) native_light_levels: vec2<f32>,
     @if(!ENHANCED)
     @location(11) native_ao_face: f32,
     @if(!ENHANCED)
-    @location(12) @interpolate(flat) uniform_tint_gamma: vec4<f32>,
+    @location(12) @interpolate(flat, either) uniform_tint_gamma: vec4<f32>,
 }
+
+// CHUNK_STAGE_INTERFACE
 
 fn quad_corner(face: u32, corner: u32, origin: vec3<f32>, width: f32, height: f32) -> vec3<f32> {
     var corners = array<vec3<f32>, 4>(origin, origin, origin, origin);
@@ -261,14 +263,14 @@ fn quad_shape_uv_limit(shape: u32) -> vec2<f32> {
 fn vertex_unit(
     @builtin(vertex_index) vertex_index: u32,
     @builtin(instance_index) instance_index: u32,
-) -> VertexOutput {
+) -> StageOutput {
     // Header locates packed visibility references beside stable descriptor slots.
     let unit_index = instance_index * TERRAIN_UNITS_PER_INSTANCE
         + vertex_index / (TERRAIN_UNIT_QUADS * 4u);
     if (unit_index >= terrain_units[0].y) {
         var invisible: VertexOutput;
         invisible.clip_position = vec4(2.0, 2.0, 2.0, 1.0);
-        return invisible;
+        return pack_stage(invisible);
     }
     let references = terrain_units[0].x;
     let slot = terrain_units[references + unit_index / 4u][unit_index % 4u];
@@ -277,9 +279,9 @@ fn vertex_unit(
     if (quad >= unit.y || unit.w != 0u) {
         var invisible: VertexOutput;
         invisible.clip_position = vec4(2.0, 2.0, 2.0, 1.0);
-        return invisible;
+        return pack_stage(invisible);
     }
-    return cube_vertex(unit.z * 4u + vertex_index % 4u, unit.x + quad);
+    return pack_stage(cube_vertex(unit.z * 4u + vertex_index % 4u, unit.x + quad));
 }
 
 // Per-section and indirect draws fetch their vertex index and first instance from vertex
@@ -290,8 +292,8 @@ fn vertex_unit(
 fn vertex(
     @location(0) offsets: vec2<u32>,
     @builtin(instance_index) instance_index: u32,
-) -> VertexOutput {
-    return cube_vertex(offsets.x, offsets.y + instance_index);
+) -> StageOutput {
+    return pack_stage(cube_vertex(offsets.x, offsets.y + instance_index));
 }
 
 // Expand cube edges within their face to cover T-junction gaps from subpixel snapping.
@@ -642,7 +644,8 @@ fn native_cube_colour(
 }
 
 @fragment
-fn fragment(in: VertexOutput, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
+fn fragment(stage: StageOutput, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
+    let in = unpack_stage(stage);
     let uv_dx = dpdx(in.uv);
     let uv_dy = dpdy(in.uv);
     if (!material_face_is_visible(in.material_flags, front)) { discard; }
@@ -746,7 +749,8 @@ flags: u32) -> CutoutSample {
 // Single-sided opaque runs: back-face culling and the mesher's material partition
 // stand in for both discards, keeping early depth and hidden-surface removal.
 @fragment
-fn fragment_solid(in: VertexOutput) -> @location(0) vec4<f32> {
+fn fragment_solid(stage: StageOutput) -> @location(0) vec4<f32> {
+    let in = unpack_stage(stage);
     @if(OPAQUE_OVERDRAW)
     return vec4(1.0);
     @if(!OPAQUE_OVERDRAW)
@@ -828,8 +832,9 @@ fn shade_cube(in: VertexOutput, sampled: vec4<f32>) -> vec4<f32> {
 @if(ENHANCED_SHADOW)
 @fragment
 fn fragment_shadow(@if(ENHANCED_SHADOW)
-in: VertexOutput, @if(ENHANCED_SHADOW)
+stage: StageOutput, @if(ENHANCED_SHADOW)
 @builtin(front_facing) front: bool) {
+    let in = unpack_stage(stage);
     let dx = dpdx(in.uv);
     let dy = dpdy(in.uv);
     if (!material_face_is_visible(in.material_flags, front)) { discard; }

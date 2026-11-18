@@ -77,6 +77,7 @@ pub(crate) fn prepare_shadow_views(
                     format: TextureFormat::Stencil8,
                     usage: TextureUsages::RENDER_ATTACHMENT,
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 })
             })
         }) else {
@@ -127,30 +128,35 @@ pub(crate) fn prepare_shadow_bind_groups(
         {
             continue;
         }
+        let mut entries = vec![
+            BindGroupEntry {
+                binding: 0,
+                resource: binding.clone(),
+            },
+            BindGroupEntry {
+                binding: 1,
+                resource: BindingResource::TextureView(crate::scene_sampling::view_depth(depth)),
+            },
+            BindGroupEntry {
+                binding: 3,
+                resource: gpu.instances.as_entire_binding(),
+            },
+            BindGroupEntry {
+                binding: 4,
+                resource: gpu.params.as_entire_binding(),
+            },
+        ];
+        if let Some(sampler) = &gpu.depth_sampler {
+            entries.push(BindGroupEntry {
+                binding: 2,
+                resource: BindingResource::Sampler(sampler),
+            });
+        }
         let bind_group = device.create_bind_group(
             "entity shadow bind group",
             &cache
                 .get_bind_group_layout(&gpu.layouts[usize::from(state.stencil.sample_count() > 1)]),
-            &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: binding.clone(),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::TextureView(crate::scene_sampling::view_depth(
-                        depth,
-                    )),
-                },
-                BindGroupEntry {
-                    binding: 3,
-                    resource: gpu.instances.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 4,
-                    resource: gpu.params.as_entire_binding(),
-                },
-            ],
+            &entries,
         );
         state.bind_group = Some((key, bind_group));
     }

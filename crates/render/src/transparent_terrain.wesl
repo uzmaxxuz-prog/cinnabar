@@ -40,12 +40,14 @@ struct VertexOutput {
     @location(13) @interpolate(perspective, centroid) model_uv: vec2<f32>,
 }
 
+// TRANSPARENT_STAGE_INTERFACE
+
 @vertex
 fn vertex(
     @builtin(vertex_index) vertex_index: u32,
     @builtin(instance_index) instance_index: u32,
-) -> VertexOutput {
-    return terrain_vertex(vertex_index, instance_index);
+) -> StageOutput {
+    return pack_stage(terrain_vertex(vertex_index, instance_index));
 }
 
 // Shared reconstruction also serves host-meshed retained geometry.
@@ -115,9 +117,9 @@ fn terrain_vertex(vertex_index: u32, instance_index: u32) -> VertexOutput {
 // Each sorted face keeps the ordinary liquid/model decoder and fragment shader.
 @if(MOD_BLOCKS)
 @vertex
-fn vertex_blocks(@builtin(vertex_index) corner: u32, @builtin(instance_index) face: u32) -> VertexOutput {
+fn vertex_blocks(@builtin(vertex_index) corner: u32, @builtin(instance_index) face: u32) -> StageOutput {
     let reference = transparent_refs(face);
-    return terrain_vertex(reference.metadata_index + corner, reference.liquid_record_index);
+    return pack_stage(terrain_vertex(reference.metadata_index + corner, reference.liquid_record_index));
 }
 
 fn liquid_output(in: VertexOutput) -> LiquidOutput {
@@ -183,7 +185,8 @@ fn model_output(in: VertexOutput) -> ModelOutput {
 }
 
 @fragment
-fn fragment(in: VertexOutput, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
+fn fragment(stage: StageOutput, @builtin(front_facing) front_facing: bool) -> @location(0) vec4<f32> {
+    let in = unpack_stage(stage);
     // Derivatives stay in uniform control flow; each family only reads its own.
     let liquid_dx = dpdx(in.liquid_uv);
     let liquid_dy = dpdy(in.liquid_uv);

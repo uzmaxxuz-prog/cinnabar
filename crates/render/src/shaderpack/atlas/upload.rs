@@ -50,6 +50,7 @@ fn upload_images(
         format,
         usage,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     for (level, bytes) in images.levels.iter().enumerate() {
         let (width, height) = (images.width >> level, images.height >> level);

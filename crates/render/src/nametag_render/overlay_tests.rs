@@ -329,8 +329,8 @@ fn overlay_world() -> (World, Entity) {
         render::{
             texture::TextureCache,
             view::{
-                ExtractedView, RetainedViewEntity, ViewDepthStencilTexture, ViewTargetAttachments,
-                prepare_view_targets,
+                prepare_view_targets, ExtractedView, RetainedViewEntity, ViewDepthStencilTexture,
+                ViewTargetAttachments,
             },
         },
     };
@@ -357,6 +357,7 @@ fn overlay_world() -> (World, Entity) {
             format: bevy::core_pipeline::core_3d::CORE_3D_DEPTH_FORMAT,
             usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         },
     );
     let mut camera = crate::render_test_support::camera(false);

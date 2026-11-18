@@ -7,8 +7,8 @@ use crate::queue_writes::ProfiledQueue as _;
 use render_scene::{ChunkBiomeTints, ChunkRenderInstance, RuntimeStageProfiler};
 
 use std::sync::{
-    Arc,
     atomic::{AtomicBool, AtomicU8, Ordering},
+    Arc,
 };
 
 use bevy::{
@@ -30,11 +30,11 @@ use super::{
     model::{CullPhase, CullViewUniform},
     occlusion::{OcclusionBasis, OcclusionHistory, VerdictTag},
     prepare::{
-        ChunkHiddenEntities, CullViewComponents, PreparedPyramid, cull_view_input, prepare_pyramid,
-        sampleable_depth, write_dirty_records,
+        cull_view_input, prepare_pyramid, sampleable_depth, write_dirty_records,
+        ChunkHiddenEntities, CullViewComponents, PreparedPyramid,
     },
-    slots::{CullSlots, cull_record},
-    storage::{OcclusionStorage, occlusion_bytes},
+    slots::{cull_record, CullSlots},
+    storage::{occlusion_bytes, OcclusionStorage},
 };
 
 const PENDING: u8 = 0;
@@ -808,7 +808,11 @@ pub(crate) fn terrain_pass(
     let color = if occlusion.same_frame {
         Vec::new()
     } else {
-        vec![Some(scene_target.color_attachment(target, false))]
+        vec![Some(scene_target.color_attachment(
+            render_context.command_encoder(),
+            target,
+            false,
+        ))]
     };
     {
         let mut pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {

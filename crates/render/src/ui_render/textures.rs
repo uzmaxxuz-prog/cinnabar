@@ -402,6 +402,19 @@ fn allocate_bucket(
     })
 }
 
+/// Runs the production single-layer UI allocation and view creation for browser validation.
+#[cfg(feature = "texture-compat-diagnostics")]
+pub(crate) fn diagnostic_texture(device: &RenderDevice) -> (Texture, TextureView) {
+    let bucket = render_model::UiTextureBucket {
+        dimensions: [1, 1],
+        layers: 1,
+        format: UiTextureFormat::Rgba8,
+    };
+    let texture = create_texture(device, &bucket);
+    let gpu = bind_texture(device, &bucket, texture);
+    (gpu.texture, gpu.view)
+}
+
 /// Creates one bucket's array texture.
 fn create_texture(device: &RenderDevice, bucket: &render_model::UiTextureBucket) -> Texture {
     #[cfg(feature = "tracy")]
@@ -428,6 +441,7 @@ fn create_texture(device: &RenderDevice, bucket: &render_model::UiTextureBucket)
         },
         usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
     })
 }
 

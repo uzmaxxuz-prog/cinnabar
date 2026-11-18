@@ -306,6 +306,7 @@ fn prepare(
                         format: FORMAT,
                         usage: TextureUsages::RENDER_ATTACHMENT,
                         view_formats: &[],
+                        texture_binding_view_dimension: None,
                     })
                 })
             else {
@@ -399,8 +400,7 @@ fn draw(
 ) -> bevy::ecs::error::Result {
     let entity = query.entity();
     let (target, camera, resolution) = query.into_inner();
-    let Some(color) = crate::scene_target::retained_color_attachment(world, entity, target, false)
-    else {
+    if crate::scene_target::unavailable(world, entity) {
         return Ok(());
     };
     let (Some(gpu), Some(targets), Some(cache), Some(scene), Some(frame), Some(materials)) = (
@@ -471,8 +471,7 @@ fn draw(
             }) {
                 continue;
             }
-            let mut attachment = color.clone();
-            attachment.ops.load = LoadOp::Load;
+            let Some(attachment) = crate::scene_target::retained_color_attachment(world, entity, context.command_encoder(), target, false) else { return Ok(()); };
             let colors = [Some(attachment)];
             let mut pass = context.begin_tracked_render_pass(RenderPassDescriptor {
                 label: Some("mesh clip contents"),
@@ -555,6 +554,7 @@ fn draw(
                 let colors = [crate::scene_target::retained_color_attachment(
                     world,
                     entity,
+                    context.command_encoder(),
                     target,
                     !camera.hdr,
                 )];

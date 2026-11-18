@@ -50,6 +50,7 @@ fn primitive_text_material_modes_keep_depth_background_and_facing() {
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     gpu.queue.write_texture(
         atlas.as_image_copy(),

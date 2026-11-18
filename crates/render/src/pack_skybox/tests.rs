@@ -22,6 +22,7 @@ fn texture(gpu: &Gpu, width: u32, height: u32, pixels: &[u8]) -> wgpu::TextureVi
                 format: crate::atmosphere_render::textures::SKYBOX_TEXTURE_FORMAT,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             },
             wgpu::util::TextureDataOrder::LayerMajor,
             pixels,

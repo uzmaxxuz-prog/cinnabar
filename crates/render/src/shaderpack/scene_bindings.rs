@@ -159,6 +159,7 @@ mod tests {
                     format,
                     usage: wgpu::TextureUsages::TEXTURE_BINDING,
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 })
                 .create_view(&Default::default())
         };

@@ -44,6 +44,7 @@ fn overlapping_cosmetic_preserves_ordinary_ink_and_occludes_sneaking_ink() {
             format: TextureFormat::Rgba8Unorm,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         },
         wgpu::util::TextureDataOrder::LayerMajor,
         &glyphs,

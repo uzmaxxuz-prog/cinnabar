@@ -3,7 +3,7 @@
 use super::super::*;
 use crate::depth_smaa::tests::raster_tests::{app_with_effects, ready};
 use crate::render_test_support::scene_raster::{
-    FixturePipelines, SIDE, fixture_pipeline, frame, read_pixels, renderer,
+    fixture_pipeline, frame, read_pixels, renderer, FixturePipelines, SIDE,
 };
 use bevy::{
     anti_alias::smaa::Smaa,
@@ -134,6 +134,7 @@ fn camera_followed_diagonal_actor_keeps_smaa_edges_sharp_with_exposure() {
         format: TextureFormat::Rgba32Float,
         usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let mut texels = Vec::new();
     for y in 0..SIDE {

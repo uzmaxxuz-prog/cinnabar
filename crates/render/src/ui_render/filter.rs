@@ -10,9 +10,9 @@
 use super::target::UiTarget;
 use super::*;
 use super::{
-    backdrop::{Pyramid, UiBackdropPipeline, UiBackdropStore, pyramid},
-    composite::{UI_LAYER_FORMAT, UiLayerTexture},
-    layer::{LayerDrawn, UiLayerDraw, draw_batches, draw_ui_layer},
+    backdrop::{pyramid, Pyramid, UiBackdropPipeline, UiBackdropStore},
+    composite::{UiLayerTexture, UI_LAYER_FORMAT},
+    layer::{draw_batches, draw_ui_layer, LayerDrawn, UiLayerDraw},
 };
 use crate::gpu_allocation::checked;
 use bevy::render::{
@@ -23,7 +23,7 @@ use bevy::render::{
     },
     renderer::RenderContext,
 };
-use render_model::{UI_BLEND_FILTER, UiScissor, UiTextureLocation};
+use render_model::{UiScissor, UiTextureLocation, UI_BLEND_FILTER};
 
 /// Whether a batch composites a filter group.
 pub(crate) fn is_filter_composite(batch: &UiRenderBatch) -> bool {
@@ -84,6 +84,7 @@ pub(super) fn prepare<'a>(
                     format: UI_LAYER_FORMAT,
                     usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 })
             })?;
             Some((texture, pyramid(device, layouts[0], sampler, extent)?))

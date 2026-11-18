@@ -7,7 +7,7 @@ use bevy::ecs::system::RunSystemOnce;
 use bevy::render::{
     renderer::{CurrentView, PendingCommandBuffers},
     texture::TextureCache,
-    view::{Msaa, RetainedViewEntity, ViewTargetAttachments, prepare_view_targets},
+    view::{prepare_view_targets, Msaa, RetainedViewEntity, ViewTargetAttachments},
 };
 
 #[test]
@@ -85,6 +85,7 @@ fn unsupported_presentation_keeps_the_native_target() {
             format: wgpu::TextureFormat::Depth32Float,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         },
     );
     let mut camera = crate::render_test_support::camera(false);

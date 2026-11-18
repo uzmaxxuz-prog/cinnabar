@@ -93,6 +93,7 @@ fn upload(
         format: TextureFormat::Rgba8Unorm,
         usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let pixels = page.map_or(&[0; 4][..], UiTexturePage::pixels);
     queue.profiled_write_texture(

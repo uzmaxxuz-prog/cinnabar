@@ -209,6 +209,7 @@ fn geometry_draws_refresh_custom_image_feedback_before_opening_the_pass() {
         format: render_scene::SCENE_COLOR_FORMAT,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     {
         let view = output.create_view(&Default::default());

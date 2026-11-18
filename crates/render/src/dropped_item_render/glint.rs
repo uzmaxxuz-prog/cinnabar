@@ -99,6 +99,7 @@ pub(super) fn upload(
             format: TextureFormat::Rgba8UnormSrgb,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         },
         TextureDataOrder::LayerMajor,
         data,

@@ -53,6 +53,7 @@ fn covered_pixel(device: &RenderDevice, queue: &RenderQueue, range: Range<f32>) 
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let depth_texture = texture(

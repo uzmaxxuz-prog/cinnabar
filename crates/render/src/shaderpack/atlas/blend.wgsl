@@ -14,9 +14,9 @@ struct Instance {
 
 struct Varyings {
     @builtin(position) position: vec4<f32>,
-    @location(0) @interpolate(flat) origin_mip: vec3<i32>,
-    @location(1) @interpolate(flat) sources: vec4<i32>,
-    @location(2) @interpolate(flat) blend: f32,
+    @location(0) @interpolate(flat, either) origin_mip: vec3<i32>,
+    @location(1) @interpolate(flat, either) sources: vec4<i32>,
+    @location(2) @interpolate(flat, either) blend: f32,
 }
 
 struct Layers {

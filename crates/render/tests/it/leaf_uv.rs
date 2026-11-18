@@ -137,6 +137,7 @@ fn actual_gpu_draws_mirror_opposing_leaf_alpha_masks_on_all_three_axes() {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     gpu.queue.write_texture(
         texture.as_image_copy(),

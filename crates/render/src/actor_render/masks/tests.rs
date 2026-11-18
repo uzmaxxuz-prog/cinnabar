@@ -53,6 +53,31 @@ fn mask_raster_viewport_clips_to_attachments_and_handles_empty_views() {
 }
 
 #[test]
+fn compatibility_dissolve_depth_uses_a_nearest_sampler_and_single_sample_texture() {
+    for multisampled in [false, true] {
+        let core = dissolve_layout(multisampled, false);
+        assert_eq!(core.entries.len(), 1);
+        assert!(
+            matches!(core.entries[0].ty, BindingType::Texture { multisampled: actual, .. } if actual == multisampled)
+        );
+        let compatibility = dissolve_layout(multisampled, true);
+        assert_eq!(compatibility.entries.len(), 2);
+        assert!(matches!(
+            compatibility.entries[0].ty,
+            BindingType::Texture {
+                multisampled: false,
+                ..
+            }
+        ));
+        assert_eq!(compatibility.entries[1].binding, 1);
+        assert_eq!(
+            compatibility.entries[1].ty,
+            BindingType::Sampler(SamplerBindingType::NonFiltering)
+        );
+    }
+}
+
+#[test]
 fn mask_selection_keeps_the_dissolve_companion() {
     let mut app = fixture();
     let mut frame = publication(1, &[20, 20], 1);
@@ -101,20 +126,22 @@ fn mask_dissolve_prepass_writes_only_private_depth() {
     for msaa in [Msaa::Off, Msaa::Sample4] {
         for depth in [MaskDepth::Test, MaskDepth::Always] {
             let mut descriptor = actor_pipeline_descriptor(actor_bind_group_layout());
-            MaskSpecializer
-                .specialize(
-                    Key {
-                        actor: ActorPipelineKey {
-                            msaa,
-                            hdr: false,
-                            enhanced: false,
-                            material: assets::EntityRenderMaterial::DissolveDepth as u32,
-                        },
-                        depth,
+            MaskSpecializer {
+                compatibility: false,
+            }
+            .specialize(
+                Key {
+                    actor: ActorPipelineKey {
+                        msaa,
+                        hdr: false,
+                        enhanced: false,
+                        material: assets::EntityRenderMaterial::DissolveDepth as u32,
                     },
-                    &mut descriptor,
-                )
-                .unwrap();
+                    depth,
+                },
+                &mut descriptor,
+            )
+            .unwrap();
             assert_eq!(
                 descriptor.depth_stencil.unwrap().depth_write_enabled,
                 Some(true)
@@ -229,7 +256,11 @@ fn mask_pipeline_cannot_inherit_an_actors_depth_bypass_or_write_world_depth() {
                 depth,
             };
             let mut descriptor = actor_pipeline_descriptor(actor_bind_group_layout());
-            MaskSpecializer.specialize(key, &mut descriptor).unwrap();
+            MaskSpecializer {
+                compatibility: false,
+            }
+            .specialize(key, &mut descriptor)
+            .unwrap();
             let state = descriptor.depth_stencil.unwrap();
             assert_eq!(state.depth_write_enabled, Some(false));
             assert_eq!(
@@ -499,6 +530,7 @@ fn test_depth(device: &RenderDevice, side: u32, samples: u32) -> ViewDepthStenci
         format: CORE_3D_DEPTH_FORMAT,
         usage: TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     ViewDepthStencilTexture::new(
         bevy::render::texture::CachedTexture {

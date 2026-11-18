@@ -32,7 +32,9 @@ impl SpecializerKey for Key {
     type Canonical = (ActorPipelineContract, MaskDepth);
 }
 
-struct MaskSpecializer;
+struct MaskSpecializer {
+    compatibility: bool,
+}
 
 /// The placement group never includes the private writable depth attachment.
 fn placement_layout() -> BindGroupLayoutDescriptor {
@@ -52,20 +54,30 @@ fn placement_layout() -> BindGroupLayoutDescriptor {
 }
 
 /// Sampled companion depth is present only in the later dissolve-colour pass.
-fn dissolve_layout(multisampled: bool) -> BindGroupLayoutDescriptor {
-    BindGroupLayoutDescriptor::new(
-        "mask dissolve depth",
-        &[BindGroupLayoutEntry {
-            binding: 0,
+///
+/// `compatibility` mirrors the global `WEBGPU_COMPATIBILITY` shader def, which the pipeline
+/// cache derives from the device profile mode; it must not come from an independent cap such as
+/// `VIEW_FORMATS`, or the layout and the generated shader disagree on binding 1.
+fn dissolve_layout(multisampled: bool, compatibility: bool) -> BindGroupLayoutDescriptor {
+    let mut entries = vec![BindGroupLayoutEntry {
+        binding: 0,
+        visibility: ShaderStages::FRAGMENT,
+        ty: BindingType::Texture {
+            sample_type: TextureSampleType::Depth,
+            view_dimension: TextureViewDimension::D2,
+            multisampled: multisampled && !compatibility,
+        },
+        count: None,
+    }];
+    if compatibility {
+        entries.push(BindGroupLayoutEntry {
+            binding: 1,
             visibility: ShaderStages::FRAGMENT,
-            ty: BindingType::Texture {
-                sample_type: TextureSampleType::Depth,
-                view_dimension: TextureViewDimension::D2,
-                multisampled,
-            },
+            ty: BindingType::Sampler(SamplerBindingType::NonFiltering),
             count: None,
-        }],
-    )
+        });
+    }
+    BindGroupLayoutDescriptor::new("mask dissolve depth", &entries)
 }
 
 /// Identifies the private companion independently of authored material flags.
@@ -110,9 +122,10 @@ impl Specializer<RenderPipeline> for MaskSpecializer {
         let dissolve = key.actor.material & assets::EntityRenderMaterialState::KIND_MASK
             == assets::EntityRenderMaterial::DissolveColor as u32;
         if dissolve {
-            descriptor
-                .layout
-                .push(dissolve_layout(key.actor.msaa.samples() > 1));
+            descriptor.layout.push(dissolve_layout(
+                key.actor.msaa.samples() > 1,
+                self.compatibility,
+            ));
             fragment.shader_defs.push(bevy::shader::ShaderDefVal::Bool(
                 "MASK_DISSOLVE".into(),
                 true,
@@ -187,6 +200,7 @@ impl MaskTarget {
                 format: FORMAT,
                 usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             })
         };
         let (texture, resolved, dissolve) =
@@ -203,6 +217,7 @@ impl MaskTarget {
                         format: CORE_3D_DEPTH_FORMAT,
                         usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
                         view_formats: &[],
+                        texture_binding_view_dimension: None,
                     }),
                 )
             })?;
@@ -268,7 +283,12 @@ impl FromWorld for MaskGpu {
         let descriptor =
             actor_pipeline_descriptor(world.resource::<ActorPipeline>().bind_group_layout.clone());
         Self {
-            variants: Variants::new(MaskSpecializer, descriptor),
+            variants: Variants::new(
+                MaskSpecializer {
+                    compatibility: world.resource::<RenderDevice>().is_webgpu_compatibility(),
+                },
+                descriptor,
+            ),
             targets: HashMap::new(),
             attachment_bytes: 0,
         }
@@ -582,13 +602,26 @@ pub(crate) fn prepare(
             if target.dissolve_binding.is_none() {
                 target.dissolve_binding =
                     gpu_allocation::checked(&device, "mask dissolve binding", 0, || {
+                        let compatibility = device.is_webgpu_compatibility();
+                        let sampler = compatibility
+                            .then(|| device.create_sampler(&SamplerDescriptor::default()));
+                        let mut entries = vec![BindGroupEntry {
+                            binding: 0,
+                            resource: BindingResource::TextureView(&target.dissolve_view),
+                        }];
+                        if let Some(sampler) = &sampler {
+                            entries.push(BindGroupEntry {
+                                binding: 1,
+                                resource: BindingResource::Sampler(sampler),
+                            });
+                        }
                         device.create_bind_group(
                             "mask dissolve binding",
-                            &cache.get_bind_group_layout(&dissolve_layout(msaa.samples() > 1)),
-                            &[BindGroupEntry {
-                                binding: 0,
-                                resource: BindingResource::TextureView(&target.dissolve_view),
-                            }],
+                            &cache.get_bind_group_layout(&dissolve_layout(
+                                msaa.samples() > 1,
+                                compatibility,
+                            )),
+                            &entries,
                         )
                     });
             }

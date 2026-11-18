@@ -58,7 +58,7 @@ struct VertexOutput {
     @location(0) world_position: vec3<f32>,
     @location(1) uv: vec2<f32>,
     @location(2) cell_u: f32,
-    @location(3) @interpolate(flat) kind: u32,
+    @location(3) @interpolate(flat, either) kind: u32,
 }
 
 fn corner_uv(corner_index: u32) -> vec2<f32> {

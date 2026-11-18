@@ -1,6 +1,6 @@
 //! Tile velocities bound the actor footprint search without a full-resolution neighbourhood scan.
 
-use super::{SHADER, history::ExposureUniform, shader::TILE_SIZE};
+use super::{history::ExposureUniform, shader::TILE_SIZE, SHADER};
 use bevy::{
     prelude::*,
     render::{render_resource::*, renderer::RenderDevice},
@@ -63,6 +63,7 @@ impl Footprint {
                     format,
                     usage: TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT,
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 })
             })
         };
