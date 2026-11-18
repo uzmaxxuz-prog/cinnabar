@@ -25,7 +25,7 @@ struct Variant {
     packed: bool,
 }
 
-/// Enumerates the renderer's independent switches, including motion and mask MSAA paths.
+/// Enumerates shader variants, including motion and mask MSAA paths.
 fn variants() -> Vec<Variant> {
     let mut variants = Vec::new();
     let shader = shader_safety::from_actor_wesl(
@@ -95,6 +95,10 @@ fn variants() -> Vec<Variant> {
         for enhanced in [false, true] {
             for coverage in [false, true] {
                 for units in [false, true] {
+                    // queue_chunks and ChunkPipeline::prewarm only use units outside Enhanced.
+                    if enhanced && units {
+                        continue;
+                    }
                     let mut definitions = Vec::new();
                     if enhanced {
                         definitions.push("ENHANCED");
@@ -117,15 +121,34 @@ fn variants() -> Vec<Variant> {
     }
     let mut additional = Vec::new();
     for variant in &variants {
-        if variant.name.starts_with("model-") || variant.name.starts_with("chunk-") {
-            let mut definitions = variant.definitions.clone();
-            definitions.push("ENHANCED_SHADOW");
-            additional.push(Variant {
-                name: format!("{}-shadow", variant.name),
-                source: variant.source.clone(),
-                definitions,
-                packed: true,
-            });
+        // Enhanced shadow pipelines use `vertex` and reserve group 2 for the caster,
+        // not the Enhanced frame or terrain units.
+        if (variant.name.starts_with("model-") || variant.name.starts_with("chunk-"))
+            && !variant.definitions.contains(&"ENHANCED")
+            && !variant.definitions.contains(&"TERRAIN_UNITS")
+        {
+            let coverage = variant.definitions.contains(&"ALPHA_TO_COVERAGE");
+            for packed_terrain in [false, true] {
+                // Both storage layouts ship without alpha-to-coverage; keep the
+                // existing unpacked alpha-to-coverage case for shader safety.
+                if packed_terrain && coverage {
+                    continue;
+                }
+                let mut definitions = variant.definitions.clone();
+                definitions.push("ENHANCED_SHADOW");
+                let suffix = if packed_terrain {
+                    definitions.push("PACKED_TERRAIN");
+                    "packed-shadow"
+                } else {
+                    "shadow"
+                };
+                additional.push(Variant {
+                    name: format!("{}-{suffix}", variant.name),
+                    source: variant.source.clone(),
+                    definitions,
+                    packed: true,
+                });
+            }
         }
         if variant.name.starts_with("transparent-") {
             let mut definitions = variant.definitions.clone();
