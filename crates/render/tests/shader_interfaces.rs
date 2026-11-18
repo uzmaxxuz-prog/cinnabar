@@ -578,21 +578,32 @@ fn exported_manifest(output: &std::path::Path) -> serde_json::Value {
     manifest
 }
 
-/// Reads one described production group by the bind group index the pass binds it at.
-fn described_group(manifest: &serde_json::Value, entry: &str, group: u64) -> serde_json::Value {
-    let exported = manifest["variants"]
+/// Reads the production bind group for the unique exported name and profile.
+fn described_group(
+    manifest: &serde_json::Value,
+    entry: &str,
+    mode: &str,
+    group: u64,
+) -> serde_json::Value {
+    let mut matches = manifest["variants"]
         .as_array()
         .expect("exported variants")
         .iter()
-        .find(|item| item["name"].as_str() == Some(entry))
-        .unwrap_or_else(|| panic!("{entry} is not exported"));
+        .filter(|item| item["name"].as_str() == Some(entry) && item["mode"].as_str() == Some(mode));
+    let exported = matches
+        .next()
+        .unwrap_or_else(|| panic!("{entry} ({mode}) is not exported"));
+    assert!(
+        matches.next().is_none(),
+        "{entry} ({mode}): duplicate exported entries"
+    );
     let groups = exported["layoutGroups"].as_array().unwrap_or_else(|| {
-        panic!("{entry}: missing layoutGroups; production group {group} is not described")
+        panic!("{entry} ({mode}): missing layoutGroups; production group {group} is not described")
     });
     groups
         .iter()
         .find(|described| described["group"].as_u64() == Some(group))
-        .unwrap_or_else(|| panic!("{entry}: group {group} is not described"))
+        .unwrap_or_else(|| panic!("{entry} ({mode}): group {group} is not described"))
         .clone()
 }
 
@@ -785,7 +796,8 @@ fn exported_manifest_describes_production_dissolve_and_shadow_bind_groups() {
                 variant.name
             );
             let entry = entries[0];
-            let group = described_group(&manifest, entry, if dissolve { 3 } else { 0 });
+            let group = described_group(&manifest, entry, mode, if dissolve { 3 } else { 0 });
+            let context = format!("{entry} ({mode})");
             let label = if dissolve {
                 "mask dissolve depth"
             } else {
@@ -794,12 +806,12 @@ fn exported_manifest_describes_production_dissolve_and_shadow_bind_groups() {
             assert_eq!(
                 group["label"].as_str(),
                 Some(label),
-                "{entry}: described group label differs from the production descriptor"
+                "{context}: described group label differs from the production descriptor"
             );
             if dissolve {
-                assert_dissolve_group(entry, &group, multisampled, compatibility);
+                assert_dissolve_group(&context, &group, multisampled, compatibility);
             } else {
-                assert_shadow_group(entry, &group, multisampled, compatibility);
+                assert_shadow_group(&context, &group, multisampled, compatibility);
             }
         }
     }
