@@ -5,6 +5,12 @@
 //! `stride * height`. The negative control proves a validation error and stores no pixels, so it
 //! publishes no frame.
 
+use std::{
+    future::Future,
+    task::{Context, Poll, Waker},
+    time::{Duration, Instant},
+};
+
 use serde_json::{Value, json};
 
 use crate::texture_compat_diagnostics::production_arrays;
@@ -22,10 +28,25 @@ const UI_ORACLE: [u8; 4] = [128, 64, 32, 255];
 /// Both production transfer paths publish a driver-shaped frame with the pixels they sampled.
 #[test]
 fn production_arrays_publish_frame_bytes_for_every_sampled_case() {
-    let Some(gpu) = crate::gpu_snapshot::Gpu::for_fixture("production array frame bytes") else {
-        return;
+    let gpu = crate::gpu_snapshot::Gpu::for_fixture("production array frame bytes")
+        .expect("production array frame bytes requires a working GPU adapter");
+    let mut future = std::pin::pin!(production_arrays(&gpu.device, &gpu.queue, false));
+    let mut context = Context::from_waker(Waker::noop());
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let report = loop {
+        assert!(
+            Instant::now() < deadline,
+            "production_arrays did not complete within 30s while polling the native GPU device"
+        );
+        if let Poll::Ready(report) = future.as_mut().poll(&mut context) {
+            break report;
+        }
+        // Native buffer mapping callbacks need device polling; there is no browser event loop.
+        gpu.device
+            .poll(wgpu::PollType::Poll)
+            .expect("native production array frame device polling succeeds");
+        std::thread::sleep(Duration::from_millis(1));
     };
-    let report = bevy::tasks::block_on(production_arrays(&gpu.device, &gpu.queue, false));
     let frames = report
         .get("frames")
         .and_then(Value::as_array)
@@ -85,10 +106,15 @@ fn production_arrays_publish_frame_bytes_for_every_sampled_case() {
         );
         let bytes = frame["bytes"]
             .as_array()
-            .and_then(|bytes| bytes.iter().map(Value::as_u64).collect::<Option<Vec<_>>>())
+            .and_then(|bytes| {
+                bytes
+                    .iter()
+                    .map(|byte| byte.as_u64().and_then(|byte| u8::try_from(byte).ok()))
+                    .collect::<Option<Vec<_>>>()
+            })
             .unwrap_or_else(|| {
                 panic!(
-                    "{id}: `bytes` must be one integer per byte: {}",
+                    "{id}: `bytes` must contain only integers in 0..=255: {}",
                     frame["bytes"]
                 )
             });
@@ -99,11 +125,11 @@ fn production_arrays_publish_frame_bytes_for_every_sampled_case() {
         );
         for (channel, (actual, expected)) in bytes[..4].iter().zip(oracle).enumerate() {
             if channel == 3 {
-                assert_eq!(*actual, u64::from(expected), "{id}: raw alpha must be exact");
+                assert_eq!(*actual, expected, "{id}: raw alpha must be exact");
                 continue;
             }
             assert!(
-                actual.abs_diff(u64::from(expected)) <= 1,
+                actual.abs_diff(expected) <= 1,
                 "{id}: channel {channel} is {actual}, the authored oracle {expected} allows one byte; \
                  first pixel {:?}",
                 &bytes[..4]
