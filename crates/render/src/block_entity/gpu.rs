@@ -426,6 +426,7 @@ fn upload_atlas(
             format: TextureFormat::Rgba8UnormSrgb,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             view_formats: raw_views.view_formats(),
+            texture_binding_view_dimension: None,
         },
     )?;
     let bytes = atlas.static_rgba8.len() as u64;

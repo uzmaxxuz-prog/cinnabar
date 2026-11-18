@@ -56,6 +56,7 @@ fn skin_array(
                     | TextureUsages::COPY_DST
                     | TextureUsages::COPY_SRC,
                 view_formats: raw_views.view_formats(),
+                texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
             })
         },
     )

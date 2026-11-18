@@ -254,6 +254,7 @@ pub(super) fn prepare(params: PrepareViewmodel) {
                 format: TextureFormat::Rgba8UnormSrgb,
                 usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             },
             TextureDataOrder::LayerMajor,
             &frame.skin.rgba8,
@@ -369,6 +370,7 @@ pub(super) fn ensure_depth(
                 format: TextureFormat::Depth32Float,
                 usage: TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             })
         })
     });

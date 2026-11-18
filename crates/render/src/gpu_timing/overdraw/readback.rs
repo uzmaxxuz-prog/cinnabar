@@ -1,6 +1,6 @@
 use std::sync::{
-    Arc,
     atomic::{AtomicU8, Ordering},
+    Arc,
 };
 
 use bevy::{camera::Viewport, render::renderer::RenderDevice};
@@ -40,6 +40,7 @@ impl Target {
             format: super::FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let view = texture.create_view(&Default::default());
         let row_bytes = (width * PIXEL_BYTES).div_ceil(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT)

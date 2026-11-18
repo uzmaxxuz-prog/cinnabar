@@ -1,7 +1,7 @@
 //! Native scene layers render after pack colour and depth have been presented.
 
 use bevy::{
-    core_pipeline::{Core3dSystems, tonemapping::tonemapping},
+    core_pipeline::{tonemapping::tonemapping, Core3dSystems},
     prelude::*,
     render::{
         renderer::{RenderContext, ViewQuery},
@@ -55,7 +55,7 @@ fn begin(world: &World, query: ViewQuery<NativeView>, mut context: RenderContext
         scene.texture.as_image_copy(),
         scene.texture.size(),
     );
-    scene.resume();
+    scene.canonical_written();
 }
 
 /// Publishes native composition before tonemapping and the independent label overlay.

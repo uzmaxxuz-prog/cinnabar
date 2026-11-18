@@ -9,7 +9,7 @@
 
 use super::target::{NativeUiTarget, UiTarget};
 use super::*;
-use crate::gpu_allocation::{FailedRequests, checked};
+use crate::gpu_allocation::{checked, FailedRequests};
 use bevy::render::{
     render_resource::{
         BindGroup, BindGroupEntries, BindGroupLayout, Extent3d, LoadOp, Operations,
@@ -18,7 +18,7 @@ use bevy::render::{
     },
     renderer::RenderContext,
 };
-use render_model::{UI_BLEND_BACKDROP, UiTextureLocation};
+use render_model::{UiTextureLocation, UI_BLEND_BACKDROP};
 use std::collections::HashMap;
 
 pub(crate) const UI_BACKDROP_SHADER_HANDLE: Handle<Shader> =
@@ -426,6 +426,7 @@ pub(super) fn pyramid(
             format: PYRAMID_FORMAT,
             usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     })?;
     let levels: Vec<_> = (0..mips)

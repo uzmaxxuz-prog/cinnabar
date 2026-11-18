@@ -18,8 +18,8 @@
 use super::super::plugin::{LoadedShaderPack, ShaderPackViews};
 use super::super::resources::ATLAS_FORMAT;
 use super::super::targets::AtlasViews;
+use super::weather::{rain_sheet, RAIN_SHEET_SIZE};
 use super::Effect;
-use super::weather::{RAIN_SHEET_SIZE, rain_sheet};
 use crate::block_entity::BlockEntityGpu;
 use crate::particle_render::ParticleGpu;
 use crate::shaderpack::draws::DrawKind;
@@ -132,6 +132,7 @@ fn texture(device: &wgpu::Device, label: &str, size: [u32; 2]) -> (wgpu::Texture
         format: ATLAS_FORMAT,
         usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
     (texture, view)

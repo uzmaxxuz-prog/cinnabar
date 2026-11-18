@@ -37,6 +37,7 @@ impl HandLayer {
                         | wgpu::TextureUsages::TEXTURE_BINDING
                         | wgpu::TextureUsages::COPY_DST,
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 })
             })?;
         let view = texture.create_view(&Default::default());
@@ -95,6 +96,7 @@ impl HandLayer {
 
 /// Starts a transparent hand layer in the same attachment after the world has been resolved.
 pub(crate) fn clear(context: &mut RenderContext, world: &World, scene: &SceneTarget) {
+    scene.canonical_written();
     let _pass = context
         .command_encoder()
         .begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -147,13 +149,16 @@ pub(crate) fn enhanced_hand_composite(
         return Ok(());
     };
     if scene.texture.sample_count() > 1 {
+        let attachments = [Some(scene.resolve_attachment(
+            context.command_encoder(),
+            &layer.view,
+            wgpu::StoreOp::Discard,
+        ))];
         let _pass = context
             .command_encoder()
             .begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("enhanced hand resolve"),
-                color_attachments: &[Some(
-                    scene.resolve_attachment(&layer.view, wgpu::StoreOp::Discard),
-                )],
+                color_attachments: &attachments,
                 depth_stencil_attachment: None,
                 timestamp_writes: crate::gpu_timing::render_pass_timestamps(
                     world,
@@ -163,6 +168,7 @@ pub(crate) fn enhanced_hand_composite(
                 multiview_mask: None,
             });
     } else {
+        scene.canonical_texture(context.command_encoder());
         context.command_encoder().copy_texture_to_texture(
             scene.texture.as_image_copy(),
             layer.texture.as_image_copy(),

@@ -116,6 +116,7 @@ impl HizPyramid {
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let mips = (0..sizes.len() as u32)
             .map(|level| {
@@ -280,6 +281,7 @@ impl CullKernels {
             format: PYRAMID_FORMAT,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         Self {
             workgroup,

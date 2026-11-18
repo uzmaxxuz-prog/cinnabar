@@ -21,6 +21,7 @@ reads = [
 alloc-stats = ["render-scene/alloc-stats"]
 tracy = ["bevy/trace", "dep:tracy-client", "render-scene/tracy"]
 publication-test-support = []
+texture-compat-diagnostics = ["dep:futures"]
 # Builds the interpolation GPU backend; presentation integration is not enabled yet.
 frame-generation = []
 # Compiles the hard-disabled Enhanced renderer.
@@ -29,6 +30,7 @@ enhanced = []
 enhanced-diagnostics = ["enhanced", "render-model/enhanced-diagnostics", "render-scene/enhanced-diagnostics"]
 
 [dependencies]
+futures = { workspace = true, optional = true }
 web-time.workspace = true
 env-compat = { path = "../env-compat" }
 render-scene = { path = "../render-scene" }

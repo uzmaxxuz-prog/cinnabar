@@ -12,9 +12,9 @@ mod geometry_frames;
 mod partial;
 
 use super::loader::{build, runnable_programs, translate_config};
-use super::passes::{FrameIo, ViewState, record_frame};
-use super::pipelines::GpuContext;
+use super::passes::{record_frame, FrameIo, ViewState};
 use super::pipelines::class_sampler;
+use super::pipelines::GpuContext;
 use super::plan::plan_frame;
 use super::plugin::{BlockIdRevisions, JAVA_DIMENSIONS};
 use super::uniforms::{FrameClock, FrameUniforms, ViewCamera};
@@ -226,6 +226,7 @@ fn render_pack_options(
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let format = render_scene::SCENE_COLOR_FORMAT;

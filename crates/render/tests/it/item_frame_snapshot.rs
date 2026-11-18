@@ -1,9 +1,9 @@
 use bevy::math::Vec3;
 use render_model::{
-    BLOCK_ENTITY_VERTEX_WORDS, BlockEntityKind, BlockEntityScene, BlockEntitySubmission,
-    BlockEntityVertex, BlockSelectionFrame, BlockSelectionTarget, CrackShape,
-    ITEM_FRAME_PANEL_FRONT_PIXELS, ITEM_FRAME_ROTATION_STEP_DEGREES, ItemFrameModel,
-    MIN_DYNAMIC_ATLAS_WIDTH, SceneClock, item_frame_item_transform,
+    item_frame_item_transform, BlockEntityKind, BlockEntityScene, BlockEntitySubmission,
+    BlockEntityVertex, BlockSelectionFrame, BlockSelectionTarget, CrackShape, ItemFrameModel,
+    SceneClock, BLOCK_ENTITY_VERTEX_WORDS, ITEM_FRAME_PANEL_FRONT_PIXELS,
+    ITEM_FRAME_ROTATION_STEP_DEGREES, MIN_DYNAMIC_ATLAS_WIDTH,
 };
 
 use crate::{
@@ -205,6 +205,7 @@ fn render_face(
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     gpu.queue.write_texture(
         texture.as_image_copy(),

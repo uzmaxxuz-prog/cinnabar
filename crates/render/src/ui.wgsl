@@ -81,14 +81,14 @@ struct UiVertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) uv: vec2<f32>,
     @location(1) color: vec4<f32>,
-    @location(2) @interpolate(flat) texture_page: u32,
-    @location(3) @interpolate(flat) style_flags: u32,
-    @location(4) @interpolate(flat) alpha_cutoff: f32,
+    @location(2) @interpolate(flat, either) texture_page: u32,
+    @location(3) @interpolate(flat, either) style_flags: u32,
+    @location(4) @interpolate(flat, either) alpha_cutoff: f32,
     @location(5) model_light: f32,
     @location(6) overlay_color: vec4<f32>,
-    @location(7) @interpolate(flat) atlas_offset: vec2<f32>,
+    @location(7) @interpolate(flat, either) atlas_offset: vec2<f32>,
     @location(8) repeat_bounds: vec4<f32>,
-    @location(9) @interpolate(flat) cull_back_faces: u32,
+    @location(9) @interpolate(flat, either) cull_back_faces: u32,
 };
 
 @vertex

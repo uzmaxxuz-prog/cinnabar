@@ -1,4 +1,22 @@
 use super::*;
+
+#[test]
+fn compatibility_preflight_never_specializes_multisampling() {
+    for samples in [Msaa::Off, Msaa::Sample2, Msaa::Sample4, Msaa::Sample8] {
+        assert_eq!(
+            requested_sample_mode(Some(samples), true, false, true),
+            Some(Msaa::Off)
+        );
+        assert_eq!(
+            requested_sample_mode(Some(samples), true, false, false),
+            Some(samples)
+        );
+        assert_eq!(
+            requested_sample_mode(Some(samples), false, false, true),
+            None
+        );
+    }
+}
 use bevy::{
     asset::uuid_handle,
     render::{
@@ -188,6 +206,7 @@ fn cancelled_sample_requests_do_not_hold_ready_views() {
     app.insert_sub_app(RenderApp, render);
     register::<TwoModes>(&mut app);
     let world = app.sub_app_mut(RenderApp).world_mut();
+    world.insert_resource(RenderDevice::new(wgpu::Device::noop(&Default::default()).0));
     world.insert_resource(cache());
     world.insert_resource(TwoModes {
         shader: Handle::default(),
@@ -245,6 +264,7 @@ fn warmup_queues_after_the_blocking_blit_and_before_render() {
     register::<TwoModes>(&mut app);
     let render = app.sub_app_mut(RenderApp);
     render
+        .insert_resource(RenderDevice::new(wgpu::Device::noop(&Default::default()).0))
         .insert_resource(cache())
         .insert_resource(TwoModes {
             shader: Handle::default(),

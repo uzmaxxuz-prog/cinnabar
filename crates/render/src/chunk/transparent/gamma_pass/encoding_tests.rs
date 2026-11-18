@@ -12,7 +12,7 @@ use bevy::{
         render_resource::*,
         renderer::{CurrentView, PendingCommandBuffers, RenderQueue},
         texture::{OutputColorAttachment, TextureCache},
-        view::{RetainedViewEntity, ViewTargetAttachments, prepare_view_targets},
+        view::{prepare_view_targets, RetainedViewEntity, ViewTargetAttachments},
     },
 };
 use std::{
@@ -74,6 +74,7 @@ fn fixture(modes: &[Option<bool>]) -> (World, Entity, Vec<Entity>) {
         format: render_scene::SCENE_COLOR_FORMAT,
         usage: TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let target = RenderTarget::Window(bevy::window::WindowRef::Entity(Entity::PLACEHOLDER))
         .normalize(None)
@@ -95,6 +96,7 @@ fn fixture(modes: &[Option<bool>]) -> (World, Entity, Vec<Entity>) {
             format: bevy::core_pipeline::core_3d::CORE_3D_DEPTH_FORMAT,
             usage: TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         },
     );
     let mut world = World::new();

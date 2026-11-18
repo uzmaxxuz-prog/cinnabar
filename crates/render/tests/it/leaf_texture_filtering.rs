@@ -61,6 +61,7 @@ fn texture(gpu: &Gpu, page: usize) -> wgpu::Texture {
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
+        texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
     });
     for (level, size) in [(0, 2), (1, 1)] {
         let mut bytes = Vec::new();
@@ -273,6 +274,7 @@ fn native_leaf_point_mip_filter_preserves_alpha_without_changing_carried_mips() 
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
+        texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
     });
     for (level, mip) in native.iter().enumerate() {
         let bytes = [mip.rgba8.as_ref(), carried[level].rgba8.as_ref()].concat();

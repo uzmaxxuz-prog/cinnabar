@@ -67,6 +67,7 @@ fn bamboo_offsets_do_not_rotate_enhanced_surface_normals() {
             format: wgpu::TextureFormat::R32Uint,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
         .create_view(&Default::default());
     let bytes = (10 * 3 * size_of::<[f32; 4]>()) as u64;

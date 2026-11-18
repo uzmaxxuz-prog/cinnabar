@@ -4,8 +4,8 @@ use crate::shader_source;
 use bevy::math::{Mat4, Vec3};
 use gpu_snapshot::{Draw, DrawPipeline, Gpu};
 use render_model::{
-    BLOCK_ENTITY_VERTEX_WORDS, BLOCK_SELECTION_VERTICES_PER_EDGE, BlockEntityVertex,
-    BlockSelectionFrame, BlockSelectionTarget, CrackShape,
+    BlockEntityVertex, BlockSelectionFrame, BlockSelectionTarget, CrackShape,
+    BLOCK_ENTITY_VERTEX_WORDS, BLOCK_SELECTION_VERTICES_PER_EDGE,
 };
 
 fn source() -> String {
@@ -68,6 +68,7 @@ fn selection_pixels_show_black_edges_or_a_brighter_surface() {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let texture_view = texture.create_view(&Default::default());
     let sampler = gpu.device.create_sampler(&Default::default());

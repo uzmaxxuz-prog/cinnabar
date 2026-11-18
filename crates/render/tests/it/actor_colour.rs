@@ -370,6 +370,7 @@ fn glint_view(gpu: &Gpu, texel: [u8; 4], pattern: bool) -> wgpu::TextureView {
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     gpu.queue.write_texture(
         texture.as_image_copy(),
@@ -529,6 +530,7 @@ fn render_cases(gpu: &Gpu, cases: Vec<Case>) {
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
     });
     gpu.queue.write_texture(
         texture.as_image_copy(),

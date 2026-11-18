@@ -49,6 +49,7 @@ pub(super) fn shadow_maps(
                     | TextureUsages::TEXTURE_BINDING
                     | TextureUsages::COPY_SRC,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             });
             let view = depth.create_view(&Default::default());
             (depth, view)

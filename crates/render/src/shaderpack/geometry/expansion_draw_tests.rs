@@ -2,11 +2,11 @@
 //! packed vertex streams.
 
 use super::expansion_tests::{
-    ANCHOR, ATLAS_SIZE, Expanded, GRASS_BLOCK_ID, GRASS_RECT, SECTION_ORIGIN, SPRITE_RGBA,
-    expand_fixture, expand_fixture_in,
+    expand_fixture, expand_fixture_in, Expanded, ANCHOR, ATLAS_SIZE, GRASS_BLOCK_ID, GRASS_RECT,
+    SECTION_ORIGIN, SPRITE_RGBA,
 };
-use super::vertex::{CONSTANT_STREAM_WORDS, TerrainLayout, draw_origin};
-use super::{DRAW_ORIGIN_VERTEX_BUFFER, LIGHTMAP_TEXTURE_MATRIX, vertex_buffer_layouts};
+use super::vertex::{draw_origin, TerrainLayout, CONSTANT_STREAM_WORDS};
+use super::{vertex_buffer_layouts, DRAW_ORIGIN_VERTEX_BUFFER, LIGHTMAP_TEXTURE_MATRIX};
 use crate::gpu_snapshot::Gpu;
 use bevy::math::{Mat4, Vec3};
 use wgpu::util::DeviceExt;
@@ -176,6 +176,7 @@ fn draw_fixture(expanded: &Expanded) -> Vec<Vec<u8>> {
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         },
         wgpu::util::TextureDataOrder::LayerMajor,
         &atlas_pixels,
@@ -282,6 +283,7 @@ fn draw_fixture(expanded: &Expanded) -> Vec<Vec<u8>> {
             format,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let colortex = [

@@ -43,6 +43,7 @@ fn scene_texture(gpu: &Gpu) -> wgpu::TextureView {
                 format: wgpu::TextureFormat::Rgba8Unorm,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             },
             wgpu::util::TextureDataOrder::LayerMajor,
             &texels,
@@ -271,6 +272,7 @@ fn depth_through_pass(gpu: &Gpu, side: u32) -> Vec<u8> {
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let depth = texture(

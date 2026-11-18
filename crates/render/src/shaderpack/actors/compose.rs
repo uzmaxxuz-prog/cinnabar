@@ -181,6 +181,7 @@ pub(super) fn record(
                     usage: wgpu::TextureUsages::TEXTURE_BINDING
                         | wgpu::TextureUsages::STORAGE_BINDING,
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 })
             })?
         }

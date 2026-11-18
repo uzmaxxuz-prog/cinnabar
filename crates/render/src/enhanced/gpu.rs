@@ -7,11 +7,11 @@ use std::{collections::HashMap, num::NonZeroU64};
 use bevy::{
     ecs::{
         query::ROQueryItem,
-        system::{SystemParamItem, lifetimeless::SRes},
+        system::{lifetimeless::SRes, SystemParamItem},
     },
     math::{Mat4, UVec4, Vec4},
     prelude::{
-        Entity, FromWorld, Has, Local, Query, Res, ResMut, Resource, Time, With, World, default,
+        default, Entity, FromWorld, Has, Local, Query, Res, ResMut, Resource, Time, With, World,
     },
     render::{
         render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
@@ -32,13 +32,13 @@ use bevy::{
 
 use {
     super::{
-        frame::{CascadeBounds, EnhancedFrameGpu, ViewInputs, build_frame},
+        frame::{build_frame, CascadeBounds, EnhancedFrameGpu, ViewInputs},
         materials::material_classes,
     },
     render_scene::EnhancedRendering,
 };
 use {
-    crate::gpu_allocation::{FailedRequests, checked},
+    crate::gpu_allocation::{checked, FailedRequests},
     crate::scene_sampling::ResolvedDepth,
     render_scene::{AtmosphereFrame, ChunkTextureAssetIdentity, ChunkTextureAssets},
 };
@@ -199,6 +199,7 @@ fn fallback_texture(
             format,
             usage: TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            texture_binding_view_dimension: Some(dimension),
         })
         .create_view(&TextureViewDescriptor {
             dimension: Some(dimension),
@@ -312,6 +313,7 @@ pub(crate) fn prepare_enhanced_materials(
             format: TextureFormat::R32Uint,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         queue.profiled_write_texture(
             TexelCopyTextureInfo {
@@ -359,6 +361,7 @@ impl ShadowTargets {
                 format: SHADOW_FORMAT,
                 usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
+                texture_binding_view_dimension: Some(TextureViewDimension::D2Array),
             })
         })?;
         let array = texture.create_view(&TextureViewDescriptor {
@@ -500,6 +503,7 @@ fn cached(
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         },
     )
 }

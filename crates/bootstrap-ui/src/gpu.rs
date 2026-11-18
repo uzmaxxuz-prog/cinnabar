@@ -184,6 +184,7 @@ impl Gpu {
                 format: wgpu::TextureFormat::Rgba8UnormSrgb,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             });
             let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
             let group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -309,6 +310,7 @@ fn upload_faces(
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
     });
     let face_bytes = side as usize * side as usize * 4;
     for (layer, pixels) in faces.layer_major().chunks_exact(face_bytes).enumerate() {

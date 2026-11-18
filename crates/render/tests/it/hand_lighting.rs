@@ -77,6 +77,7 @@ fn java_hand_lights_normals_and_composes_texture_in_gamma() {
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
     });
     gpu.queue.write_texture(
         texture.as_image_copy(),

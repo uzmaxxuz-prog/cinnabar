@@ -294,6 +294,7 @@ pub(crate) fn init_gpu(mut commands: Commands, device: Res<RenderDevice>) {
         format: TextureFormat::Depth32Float,
         usage: TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     commands.insert_resource(PassGpu {
         layouts: [false, true]

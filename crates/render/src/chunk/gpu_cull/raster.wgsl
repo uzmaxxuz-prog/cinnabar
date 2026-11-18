@@ -72,7 +72,7 @@ fn raster_prepare(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 struct BoxVertex {
     @builtin(position) position: vec4<f32>,
-    @location(0) @interpolate(flat) slot: u32,
+    @location(0) @interpolate(flat, either) slot: u32,
 }
 
 // Rasterises the padded projected rectangle at the nearest conservative box depth.

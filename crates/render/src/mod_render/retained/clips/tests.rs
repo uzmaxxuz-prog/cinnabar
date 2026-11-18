@@ -38,6 +38,7 @@ fn masks_hide_occluded_pixels_intersect_parents_and_isolate_content_depth() {
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let color = texture(

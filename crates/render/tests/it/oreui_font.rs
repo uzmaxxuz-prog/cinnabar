@@ -23,6 +23,7 @@ fn oreui_font_edges_use_native_coverage_gamma_sampling_and_sdf_scale() {
         format: wgpu::TextureFormat::R8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
     });
     gpu.queue.write_texture(
         texture.as_image_copy(),

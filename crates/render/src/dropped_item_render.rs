@@ -1,6 +1,6 @@
 //! Draws dropped-item and block models plus dynamic line geometry in the opaque 3D phase.
 mod mesh_storage;
-mod model_upload;
+pub(crate) mod model_upload;
 use bevy::prelude::IntoScheduleConfigs;
 #[cfg(test)]
 use bevy::prelude::IntoSystem;

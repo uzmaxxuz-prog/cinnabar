@@ -568,6 +568,7 @@ impl Target {
                 format,
                 usage: usage | wgpu::TextureUsages::RENDER_ATTACHMENT | copy,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             })
         };
         Self {

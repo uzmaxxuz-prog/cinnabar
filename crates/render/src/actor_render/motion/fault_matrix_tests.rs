@@ -24,6 +24,7 @@ fn depth(device: &RenderDevice, width: u32, samples: u32) -> ViewDepthStencilTex
         format: CORE_3D_DEPTH_FORMAT,
         usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     ViewDepthStencilTexture::new(
         CachedTexture {

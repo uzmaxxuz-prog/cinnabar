@@ -19,8 +19,8 @@ struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) uv: vec2<f32>,
     @location(1) color: vec4<f32>,
-    @location(2) @interpolate(flat) alpha_test: f32,
-    @location(3) @interpolate(flat) texture_bounds: vec4<f32>,
+    @location(2) @interpolate(flat, either) alpha_test: f32,
+    @location(3) @interpolate(flat, either) texture_bounds: vec4<f32>,
 }
 
 @vertex

@@ -19,6 +19,7 @@ fn atlas(gpu: &Gpu) -> wgpu::TextureView {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
     });
     for level in 0..5 {
         let size = 16 >> level;

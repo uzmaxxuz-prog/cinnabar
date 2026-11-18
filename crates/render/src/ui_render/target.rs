@@ -27,6 +27,7 @@ pub(crate) struct NativeUiTarget {
     available: AtomicBool,
     presented: AtomicBool,
     output_format: TextureFormat,
+    needs_srgb_encoding: bool,
     sampler: Sampler,
     seed_pipelines: UpscalePipelines,
     present_pipeline: CachedRenderPipelineId,
@@ -40,6 +41,7 @@ impl NativeUiTarget {
         device: &RenderDevice,
         extent: [u32; 2],
         formats: [TextureFormat; 2],
+        needs_srgb_encoding: bool,
         pipelines: (UpscalePipelines, CachedRenderPipelineId),
         blit: &BlitPipeline,
         cache: &PipelineCache,
@@ -63,6 +65,7 @@ impl NativeUiTarget {
                     format: scene_format,
                     usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 })
             })
         };
@@ -82,6 +85,7 @@ impl NativeUiTarget {
             available: AtomicBool::new(false),
             presented: AtomicBool::new(false),
             output_format,
+            needs_srgb_encoding,
             sampler: device.create_sampler(&SamplerDescriptor {
                 label: Some("bilinear world upscale"),
                 mag_filter: FilterMode::Linear,
@@ -136,7 +140,8 @@ impl NativeUiTarget {
 
     /// Refuses stale dimensions, output formats, or resources from a replaced render device.
     fn matches(&self, device: &RenderDevice, target: &ViewTarget, extent: [u32; 2]) -> bool {
-        &self.device == device.wgpu_device()
+        self.needs_srgb_encoding == target.needs_srgb_encoding()
+            && &self.device == device.wgpu_device()
             && self.textures[0].format() == target.main_texture_format()
             && self.extent() == extent
             && target.out_texture_view_format() == Some(self.output_format)
@@ -343,7 +348,7 @@ fn encode_blit(
 }
 
 /// Includes device, extent and both formats so changed allocation requests retry immediately.
-type NativeUiRequest = (wgpu::Device, [u32; 2], TextureFormat, TextureFormat);
+type NativeUiRequest = (wgpu::Device, [u32; 2], TextureFormat, TextureFormat, bool);
 
 /// Allocates only for an admitted scaled view whose real output still matches its marker.
 #[allow(clippy::too_many_arguments)] // View admission and the two pipeline owners share one allocation boundary.
@@ -426,6 +431,7 @@ pub(crate) fn prepare_native_ui_targets(
                 blend_state: None,
                 samples: 1,
                 source_space: None,
+                needs_srgb_encoding: target.needs_srgb_encoding(),
             },
         );
         let request = (
@@ -433,12 +439,14 @@ pub(crate) fn prepare_native_ui_targets(
             extent,
             scene_format,
             output_format,
+            target.needs_srgb_encoding(),
         );
         if let Some(native) = failed.attempt(entity, request, || {
             NativeUiTarget::new(
                 &device,
                 extent,
                 [scene_format, output_format],
+                target.needs_srgb_encoding(),
                 (seeds, present),
                 blit,
                 &cache,
@@ -510,6 +518,10 @@ impl<'a> UiTarget<'a> {
             || self.output.post_process_write(),
             NativeUiTarget::post_process_write,
         )
+    }
+    /// Whether the final output needs shader encoding, independently of the UI scene storage.
+    pub(crate) fn needs_srgb_encoding(self) -> bool {
+        self.output.needs_srgb_encoding()
     }
     /// Borrows the native presentation attachment independently of scene size.
     pub(crate) fn out_texture(self) -> Option<&'a TextureView> {

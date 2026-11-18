@@ -23,6 +23,7 @@ fn water_fragment_preserves_submerged_receiver_and_native_gamma_lighting() {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
     });
     let texels = [[155_u8, 178, 201, 255], [202, 161, 129, 190]];
     gpu.queue.write_texture(

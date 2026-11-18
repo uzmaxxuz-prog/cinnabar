@@ -34,13 +34,13 @@ struct VertexInput {
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) uv: vec2<f32>,
-    @location(1) @interpolate(flat) layer: u32,
+    @location(1) @interpolate(flat, either) layer: u32,
     @location(2) shade: f32,
-    @location(3) @interpolate(flat) levels: vec2<u32>,
+    @location(3) @interpolate(flat, either) levels: vec2<u32>,
     @location(4) color: vec4<f32>,
-    @location(5) @interpolate(flat) overlay: vec4<f32>,
+    @location(5) @interpolate(flat, either) overlay: vec4<f32>,
     @location(6) world_position: vec3<f32>,
-    @location(7) @interpolate(flat) glint_scale: vec2<f32>,
+    @location(7) @interpolate(flat, either) glint_scale: vec2<f32>,
 }
 
 // Provisional directional shade: full on top faces, half on bottom faces.

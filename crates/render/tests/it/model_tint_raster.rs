@@ -185,6 +185,7 @@ fn atlas(gpu: &Gpu) -> wgpu::TextureView {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
     });
     let texels = (0..2 * TEXTURE_SIDE * TEXTURE_SIDE)
         .flat_map(|index| {

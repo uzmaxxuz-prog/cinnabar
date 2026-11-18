@@ -43,9 +43,10 @@ pub(super) fn far_terrain(
     {
         return Ok(());
     }
+    let colour = scene.color_attachment(context.command_encoder(), target, false);
     let mut pass = context.begin_tracked_render_pass(RenderPassDescriptor {
         label: Some("far terrain"),
-        color_attachments: &[Some(scene.color_attachment(target, false))],
+        color_attachments: &[Some(colour)],
         depth_stencil_attachment: Some(depth.get_attachment(StoreOp::Store)),
         timestamp_writes: crate::gpu_timing::render_pass_timestamps(
             world,

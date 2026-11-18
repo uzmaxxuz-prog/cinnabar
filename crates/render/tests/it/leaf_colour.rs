@@ -148,6 +148,7 @@ fn native_cube_and_leaf_pixels_match_gamma_products_without_changing_carried_col
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
         usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[wgpu::TextureFormat::Rgba8Unorm],
+        texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
     });
     gpu.queue.write_texture(
         wgpu::TexelCopyTextureInfo {

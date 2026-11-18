@@ -3,12 +3,11 @@
 use bevy::{
     asset::{AssetPlugin, Assets},
     camera::{CameraPlugin, RenderTarget},
-    core_pipeline::{Core3d, CorePipelinePlugin, tonemapping::Tonemapping},
+    core_pipeline::{tonemapping::Tonemapping, Core3d, CorePipelinePlugin},
     image::ImagePlugin,
     mesh::MeshPlugin,
     prelude::*,
     render::{
-        RenderApp, RenderPlugin,
         render_asset::RenderAssets,
         render_resource::{
             BufferUsages, ColorWrites, CompareFunction, Extent3d, StoreOp, TextureFormat,
@@ -21,6 +20,7 @@ use bevy::{
         settings::RenderCreation,
         texture::GpuImage,
         view::{ViewDepthStencilTexture, ViewTarget},
+        RenderApp, RenderPlugin,
     },
     window::WindowPlugin,
 };
@@ -47,7 +47,11 @@ fn fixture_opaque(
 ) {
     let (target, scene, depth) = query.into_inner();
     let fixture = world.resource::<FixturePipelines>();
-    let attachments = [Some(scene.color_attachment(target, false))];
+    let attachments = [Some(scene.color_attachment(
+        context.command_encoder(),
+        target,
+        false,
+    ))];
     let mut pass = context
         .command_encoder()
         .begin_render_pass(&wgpu::RenderPassDescriptor {

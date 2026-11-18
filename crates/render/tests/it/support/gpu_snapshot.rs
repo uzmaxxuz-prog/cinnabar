@@ -295,6 +295,7 @@ impl Gpu {
                 format: wgpu::TextureFormat::Rgba8UnormSrgb,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             })
             .create_view(&Default::default())
     }
@@ -480,6 +481,7 @@ impl Gpu {
                 format,
                 usage,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             })
         };
         let target = texture(

@@ -25,8 +25,8 @@ struct VertexOutput {
     @location(1) color: vec4<f32>,
     @location(2) native_lighting: vec3<f32>,
     @location(3) world_position: vec3<f32>,
-    @location(4) @interpolate(flat) actor_light: u32,
-    @location(5) @interpolate(flat) beam_tile: vec2<f32>,
+    @location(4) @interpolate(flat, either) actor_light: u32,
+    @location(5) @interpolate(flat, either) beam_tile: vec2<f32>,
     // Negative where an entity-lit face points away from the camera.
     @location(6) facing: f32,
 }

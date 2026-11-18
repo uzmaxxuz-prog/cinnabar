@@ -47,6 +47,14 @@ input-latch consumption. Other prediction-sync metadata, pose sizes, exact send
 phase and live server acceptance remain incomplete.
 ## Browser release verification
 
+Compatibility texture and scene-transfer fixes are source-written, with regression sources for
+physical mip pairs, retained encoding transitions, array bindings, MSAA preflight and UI RGB/alpha.
+Signed commit `b28abb5fa37c381254c32d60216cde3d6567a978` records the resolver-generated lockfile
+(SHA-256 `4abea54a4e9194cc82c24e4b3809feac717e677e504227204ff78f1f45c4ba7a`): 52 Bevy crates at
+public `uzmaxxuz-prog/bevy` revision `760508ef74ad0e6c9a3f97cb7c399c6edee6e2dd`. At that commit, the mandatory clippy attempt failed with E0599; the lock receipt is not compiler acceptance.
+The release gate still requires the pinned dependency to be reachable from `cinnabar-v0.20`; the lock receipt does not establish that reachability.
+Browser and native runtime acceptance remain incomplete. No gate closes here.
+
 Browser target checks and JavaScript edge suites are CI gates. Go and Rust consume
 shared control fixtures, and devtool builds a staged static bundle with the locked
 binding CLI and canonical carrier delivery index. Certificate renewal retains

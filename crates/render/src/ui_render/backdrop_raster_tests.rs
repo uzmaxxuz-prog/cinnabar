@@ -1,8 +1,8 @@
 //! Pixel tests of the production backdrop shaders on a native headless adapter: the pass order
 //! of [`super::apply_backdrops`] over an sRGB scene, read back after the shapes draw.
 
-use super::{PYRAMID_FORMAT, pyramid_extent};
-use crate::gpu_snapshot::{Gpu, SNAPSHOT_SIDE, save};
+use super::{pyramid_extent, PYRAMID_FORMAT};
+use crate::gpu_snapshot::{save, Gpu, SNAPSHOT_SIDE};
 use render_api::UiBackdropPaint;
 use std::borrow::Cow;
 use wgpu::util::DeviceExt;
@@ -111,6 +111,7 @@ fn raster_levels(gpu: &Gpu, mode: Mode, scene: &[u8], shapes: &[Shape], pruned: 
             format: mode.format(),
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         },
         wgpu::util::TextureDataOrder::LayerMajor,
         scene,
@@ -125,6 +126,7 @@ fn raster_levels(gpu: &Gpu, mode: Mode, scene: &[u8], shapes: &[Shape], pruned: 
         format: PYRAMID_FORMAT,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let output = device.create_texture(&wgpu::TextureDescriptor {
         label: None,
@@ -135,6 +137,7 @@ fn raster_levels(gpu: &Gpu, mode: Mode, scene: &[u8], shapes: &[Shape], pruned: 
         format: mode.format(),
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         mag_filter: wgpu::FilterMode::Linear,

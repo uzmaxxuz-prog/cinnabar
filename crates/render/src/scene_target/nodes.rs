@@ -55,7 +55,7 @@ pub(crate) fn scene_opaque<const AFTER_PACK: bool>(
     };
     let color = scene.map_or_else(
         || target.get_color_attachment(),
-        |scene| scene.color_attachment(target, false),
+        |scene| scene.color_attachment(context.command_encoder(), target, false),
     );
     let depth = depth.get_attachment(StoreOp::Store);
     let viewport = Viewport::from_viewport_and_override(camera.viewport.as_ref(), resolution).map(

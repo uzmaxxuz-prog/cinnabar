@@ -52,6 +52,7 @@ fn compose_on_gpu(gpu: &Gpu, compose: LayerCompose) -> Vec<u8> {
         format: TextureFormat::Rgba8UnormSrgb,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[TextureFormat::Rgba8Unorm],
+        texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
     });
     gpu.queue.write_texture(
         artwork.as_image_copy(),
@@ -75,6 +76,7 @@ fn compose_on_gpu(gpu: &Gpu, compose: LayerCompose) -> Vec<u8> {
         format: COMPOSED_FORMAT,
         usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let source = crate::shader_source::composed_prepared_with(
         &compose_shader_source(include_str!("compose.wesl")),
@@ -230,6 +232,7 @@ fn composed_draws_bind_their_own_layer_without_a_second_dye() {
             format: TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         },
     ));
     let tint = u32::from_le_bytes([128, 255, 64, 255]);

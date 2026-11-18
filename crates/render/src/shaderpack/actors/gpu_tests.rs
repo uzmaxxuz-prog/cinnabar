@@ -2,7 +2,7 @@
 
 use super::layout::ACTOR_VERTEX_WORDS;
 use super::skin::{
-    SKIN_PARAMS_BYTES, SkinJob, SkinParams, output_layout, rig_layout, skin_shader_source,
+    output_layout, rig_layout, skin_shader_source, SkinJob, SkinParams, SKIN_PARAMS_BYTES,
 };
 use crate::gpu_snapshot::Gpu;
 use crate::shaderpack::geometry::{BLOCK_ID, LIGHTMAP, NORMAL, POSITION, UV0};
@@ -475,6 +475,7 @@ fn glint_draws_honor_strength_and_the_configured_clock() {
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         },
     ));
     for hand in [false, true] {
@@ -682,6 +683,7 @@ fn ordinary_actor_draws_use_the_no_item_sentinel() {
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         },
     ));
     let source = GlintSource {
@@ -876,6 +878,7 @@ fn actor_stream_failure_keeps_world_replacement_and_native_actors() {
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         },
     ));
     let source = GlintSource {

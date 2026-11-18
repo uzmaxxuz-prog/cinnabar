@@ -1,15 +1,15 @@
 //! Immutable carrier atlas creation and upload, shared by bootstrap and server replacements.
 use super::bind_groups::{
-    AnimationGpu, ChunkTextureUploadStats, MaterialGpu, PreparedChunkTextureAssets,
     chunk_sampler_descriptor, encode_model_template_words, gpu_texture_reference,
-    plan_queue_texture_mips, storage_table_fits, write_texture_mips,
+    plan_queue_texture_mips, storage_table_fits, write_texture_mips, AnimationGpu,
+    ChunkTextureUploadStats, MaterialGpu, PreparedChunkTextureAssets,
 };
 use crate::chunk::*;
 use crate::queue_writes::ProfiledQueue as _;
 #[cfg(feature = "enhanced")]
 use assets::texture::TextureMip;
 use render_scene::{
-    TextureArrayLimits, TextureMipUploadPlan, diagnostic_texture_page, plan_texture_page_bindings,
+    diagnostic_texture_page, plan_texture_page_bindings, TextureArrayLimits, TextureMipUploadPlan,
 };
 /// Unused material bindings remain valid without deriving materials from carrier albedo.
 #[cfg(feature = "enhanced")]
@@ -307,15 +307,19 @@ pub(in crate::chunk) fn build_chunk_texture_assets(
         usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
     });
     let mut uploaded_bytes = 0u64;
+    let split = !render_device
+        .downlevel_flags()
+        .contains(wgpu::DownlevelFlags::VIEW_FORMATS);
+    let mut native_leaf_textures = Vec::with_capacity(assets::MAX_TEXTURE_PAGES);
     let mut textures = Vec::with_capacity(assets::MAX_TEXTURE_PAGES);
     let mut views = Vec::with_capacity(assets::MAX_TEXTURE_PAGES);
     // Upload the mip-rebuilt pages the validator measured, not the raw sources.
-    for (index, (texture, plans)) in terrain_pages.iter().zip(upload_plans).enumerate() {
+    for (index, (texture, plans)) in terrain_pages.iter().zip(&upload_plans).enumerate() {
         let (texture, view, uploaded) = upload_texture_page(
             render_device,
             render_queue,
             texture,
-            &plans,
+            plans,
             match index {
                 0 => "global chunk texture page 0",
                 1 => "global chunk texture page 1",
@@ -325,6 +329,19 @@ pub(in crate::chunk) fn build_chunk_texture_assets(
             },
         );
         uploaded_bytes = uploaded_bytes.saturating_add(uploaded);
+        if split {
+            let (leaf, _, uploaded) = upload_texture_page_format(
+                render_device,
+                render_queue,
+                &terrain_pages[index],
+                plans,
+                "native world leaf atlas",
+                TextureFormat::Rgba8Unorm,
+                &[],
+            );
+            native_leaf_textures.push(leaf);
+            uploaded_bytes = uploaded_bytes.saturating_add(uploaded);
+        }
         textures.push(texture);
         views.push(view);
     }
@@ -420,22 +437,24 @@ pub(in crate::chunk) fn build_chunk_texture_assets(
         contents: bytemuck::cast_slice(enhanced_texture_refs),
         usage: BufferUsages::STORAGE,
     });
-    // Current atlas upload retains RGBA8_UNORM.
-    // A view of each existing allocation preserves gamma-space filtering for
-    // world leaves without duplicating texture memory or changing other art.
-    let native_leaf_views = textures
-        .iter()
-        .map(|texture| {
-            texture.create_view(&TextureViewDescriptor {
-                label: Some("native world leaf atlas view"),
-                format: Some(TextureFormat::Rgba8Unorm),
-                dimension: Some(TextureViewDimension::D2Array),
-                ..Default::default()
-            })
+    // Core shares allocations; restricted adapters sample identical rebuilt bytes from UNORM pages.
+    let native_leaf_views = if split {
+        &native_leaf_textures
+    } else {
+        &textures
+    }
+    .iter()
+    .map(|texture| {
+        texture.create_view(&TextureViewDescriptor {
+            label: Some("native world leaf atlas view"),
+            format: Some(TextureFormat::Rgba8Unorm),
+            dimension: Some(TextureViewDimension::D2Array),
+            ..Default::default()
         })
-        .collect::<Vec<_>>()
-        .try_into()
-        .expect("every physical page uploads a view");
+    })
+    .collect::<Vec<_>>()
+    .try_into()
+    .expect("every physical page uploads a view");
     let sampler = render_device.create_sampler(&chunk_sampler_descriptor());
     let native_leaf_sampler =
         render_device.create_sampler(&crate::material_shader::native_leaf_sampler_descriptor());
@@ -452,6 +471,14 @@ pub(in crate::chunk) fn build_chunk_texture_assets(
         .flat_map(|texture| texture.mips.iter())
         .map(|mip| mip.rgba8.len() as u64)
         .sum();
+    if split {
+        stats.texture_bytes_including_mips = terrain_pages
+            .iter()
+            .flat_map(|page| page.mips.iter())
+            .map(|mip| mip.rgba8.len() as u64)
+            .sum::<u64>()
+            .saturating_mul(2);
+    }
     stats.queue_upload_bytes = uploaded_bytes;
     #[cfg(feature = "enhanced")]
     {
@@ -491,6 +518,11 @@ pub(in crate::chunk) fn build_chunk_texture_assets(
         animation_frame_buffer,
         model_template_buffer,
         _textures: textures.try_into().expect("every physical page uploads"),
+        _native_leaf_textures: split.then(|| {
+            native_leaf_textures
+                .try_into()
+                .expect("every physical leaf page uploads")
+        }),
         views: views
             .try_into()
             .expect("every physical page uploads a view"),
@@ -558,7 +590,14 @@ pub(in crate::chunk) fn upload_texture_page(
         upload_plans,
         label,
         TextureFormat::Rgba8UnormSrgb,
-        &[TextureFormat::Rgba8Unorm],
+        if render_device
+            .downlevel_flags()
+            .contains(wgpu::DownlevelFlags::VIEW_FORMATS)
+        {
+            &[TextureFormat::Rgba8Unorm]
+        } else {
+            &[]
+        },
     )
 }
 
@@ -608,6 +647,7 @@ fn upload_texture_page_format(
         format,
         usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
         view_formats,
+        texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
     });
     let queue_upload_bytes = write_texture_mips(texture_array, upload_plans, |plan, bytes| {
         render_queue.profiled_write_texture(
@@ -644,7 +684,7 @@ fn upload_texture_page_format(
 mod tests {
     use super::*;
     #[cfg(feature = "enhanced")]
-    use render_scene::{EnhancedTextureAssets, plan_texture_mip_uploads};
+    use render_scene::{plan_texture_mip_uploads, EnhancedTextureAssets};
 
     /// Ordinary carrier uploads fit the five-page sRGB and native-leaf views, two samplers,
     /// and the biome table at binding 26.
@@ -686,8 +726,9 @@ mod tests {
             })
             .sum();
 
-        assert_eq!(stats.texture_bytes_including_mips, expected);
-        assert_eq!(stats.queue_upload_bytes, expected);
+        assert!(prepared._native_leaf_textures.is_some());
+        assert_eq!(stats.texture_bytes_including_mips, expected * 2);
+        assert_eq!(stats.queue_upload_bytes, expected * 2);
     }
 
     #[cfg(feature = "enhanced")]

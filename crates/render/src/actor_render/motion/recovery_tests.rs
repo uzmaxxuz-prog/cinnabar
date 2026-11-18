@@ -84,6 +84,7 @@ fn depth(device: &RenderDevice, samples: u32) -> ViewDepthStencilTexture {
         format: TextureFormat::Depth32Float,
         usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     ViewDepthStencilTexture::new(
         CachedTexture {

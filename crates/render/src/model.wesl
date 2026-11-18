@@ -49,6 +49,8 @@ struct VertexOutput {
     @location(13) @interpolate(flat) tint_gamma: vec3<f32>,
 }
 
+// MODEL_STAGE_INTERFACE
+
 struct FrameSample { current: u32, next: u32, blend: f32 }
 // Visibility also carries the admitted tile policy without another interpolator.
 const MODEL_VISIBLE: u32 = 1u;
@@ -157,14 +159,14 @@ fn lily_pad_rotation(position: vec3<i32>) -> u32 {
 fn vertex_unit(
     @builtin(vertex_index) vertex_index: u32,
     @builtin(instance_index) instance_index: u32,
-) -> VertexOutput {
+) -> StageOutput {
     // Header locates packed visibility references beside stable descriptor slots.
     let unit_index = instance_index * TERRAIN_UNITS_PER_INSTANCE
         + vertex_index / (TERRAIN_UNIT_QUADS * 4u);
     if (unit_index >= terrain_units[0].y) {
         var invisible: VertexOutput;
         invisible.clip_position = vec4(2.0, 2.0, 2.0, 1.0);
-        return invisible;
+        return pack_stage(invisible);
     }
     let references = terrain_units[0].x;
     let slot = terrain_units[references + unit_index / 4u][unit_index % 4u];
@@ -173,9 +175,9 @@ fn vertex_unit(
     if (quad >= unit.y || unit.w != 0u) {
         var invisible: VertexOutput;
         invisible.clip_position = vec4(2.0, 2.0, 2.0, 1.0);
-        return invisible;
+        return pack_stage(invisible);
     }
-    return model_vertex(unit.z * 4u + vertex_index % 4u, unit.x + quad);
+    return pack_stage(model_vertex(unit.z * 4u + vertex_index % 4u, unit.x + quad));
 }
 
 // Fetches the vertex index and first instance from vertex buffer 0, as `chunk.wesl` describes.
@@ -183,8 +185,8 @@ fn vertex_unit(
 fn vertex(
     @location(0) offsets: vec2<u32>,
     @builtin(instance_index) instance_index: u32,
-) -> VertexOutput {
-    return model_vertex(offsets.x, offsets.y + instance_index);
+) -> StageOutput {
+    return pack_stage(model_vertex(offsets.x, offsets.y + instance_index));
 }
 
 /// One quad of a placed model, decoded as every model program reads it. Its flags are 0 or 1
@@ -734,9 +736,10 @@ sampled_gamma: vec4<f32>) -> vec4<f32> {
 
 @fragment
 fn fragment(
-    in: VertexOutput,
+    stage: StageOutput,
     @builtin(front_facing) front_facing: bool,
 ) -> @location(0) vec4<f32> {
+    let in = unpack_stage(stage);
     if (in.visibility.x == 0u) { discard; }
     if (!front_facing && in.visibility.y == 0u) { discard; }
     let dx = dpdx(in.uv);
@@ -784,9 +787,10 @@ fn fragment(
 
 @fragment
 fn fragment_blend(
-    in: VertexOutput,
+    stage: StageOutput,
     @builtin(front_facing) front_facing: bool,
 ) -> @location(0) vec4<f32> {
+    let in = unpack_stage(stage);
     return shade_blend(in, front_facing, dpdx(in.uv), dpdy(in.uv));
 }
 
@@ -832,7 +836,8 @@ fn shade_blend(in: VertexOutput, front_facing: bool, dx: vec2<f32>, dy: vec2<f32
 @if(ENHANCED_SHADOW)
 @fragment
 fn fragment_shadow(@if(ENHANCED_SHADOW)
-in: VertexOutput) {
+stage: StageOutput) {
+    let in = unpack_stage(stage);
     let dx = dpdx(in.uv);
     let dy = dpdy(in.uv);
     var sampled = sample_model_ref(in, in.current_texture, dx, dy);

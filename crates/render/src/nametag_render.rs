@@ -15,20 +15,19 @@ use std::{ops::Range, sync::Arc};
 
 use bevy::{
     asset::{load_internal_asset, uuid_handle},
-    core_pipeline::core_3d::{CORE_3D_DEPTH_FORMAT, Transparent3d},
+    core_pipeline::core_3d::{Transparent3d, CORE_3D_DEPTH_FORMAT},
     ecs::{
         query::ROQueryItem,
         system::{
-            SystemParamItem,
             lifetimeless::{Read, SRes},
+            SystemParamItem,
         },
     },
     prelude::{
-        App, BevyError, Commands, Entity, FromWorld, Handle, Msaa, Query, Res, ResMut, Resource,
-        Result, Shader, World, default,
+        default, App, BevyError, Commands, Entity, FromWorld, Handle, Msaa, Query, Res, ResMut,
+        Resource, Result, Shader, World,
     },
     render::{
-        Render, RenderApp, RenderStartup, RenderSystems,
         extract_resource::ExtractResourcePlugin,
         render_phase::{
             DrawFunctionId, DrawFunctions, PhaseItem, PhaseItemExtraIndex, RenderCommand,
@@ -48,10 +47,11 @@ use bevy::{
         renderer::RenderDevice,
         sync_world::MainEntity,
         view::{ExtractedView, ViewUniform, ViewUniformOffset, ViewUniforms},
+        Render, RenderApp, RenderStartup, RenderSystems,
     },
 };
 
-use render_model::{MAX_NAMETAG_RECORDS, NAMETAG_ATLAS_SIDE, NametagAtlasRect, NametagRecord};
+use render_model::{NametagAtlasRect, NametagRecord, MAX_NAMETAG_RECORDS, NAMETAG_ATLAS_SIDE};
 
 const NAMETAG_SHADER_HANDLE: Handle<Shader> = uuid_handle!("5d1f0c8e-2a47-4b93-9e6c-1f7a3b8d4c20");
 const RECORD_BYTES: usize = std::mem::size_of::<NametagRecord>();
@@ -174,6 +174,7 @@ fn init_nametag_gpu(mut commands: Commands, render_device: Res<RenderDevice>) {
         format: TextureFormat::Rgba8UnormSrgb,
         usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let atlas_view = atlas_texture.create_view(&TextureViewDescriptor {
         dimension: Some(TextureViewDimension::D2),

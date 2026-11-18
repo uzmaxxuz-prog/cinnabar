@@ -78,9 +78,9 @@ const MOON_HALF_EXTENT: f32 = tan(18.924 * 0.0174532924 * 0.5);
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) star_alpha: f32,
-    @location(1) @interpolate(flat) zenith_gamma: vec3<f32>,
-    @location(2) @interpolate(flat) horizon_gamma: vec3<f32>,
-    @location(3) @interpolate(flat) fog_gamma: vec3<f32>,
+    @location(1) @interpolate(flat, either) zenith_gamma: vec3<f32>,
+    @location(2) @interpolate(flat, either) horizon_gamma: vec3<f32>,
+    @location(3) @interpolate(flat, either) fog_gamma: vec3<f32>,
 }
 
 // Converts uniform sky colours per vertex and keeps star vertices free of those transfers.

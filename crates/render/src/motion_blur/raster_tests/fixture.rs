@@ -64,6 +64,7 @@ impl Raster {
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     }
 
@@ -433,6 +434,7 @@ impl Raster {
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             })
             .create_view(&Default::default())
     }
@@ -463,6 +465,7 @@ impl Raster {
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             })
             .create_view(&Default::default());
         for (entry, format, view, entries) in [

@@ -78,6 +78,7 @@ pub fn upload(
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     queue.write_texture(
         texture.as_image_copy(),

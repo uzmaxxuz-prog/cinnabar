@@ -17,7 +17,7 @@ struct Screen {
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) uv: vec2<f32>,
-    @location(1) @interpolate(flat) lit: f32,
+    @location(1) @interpolate(flat, either) lit: f32,
 }
 
 fn corner_uv(corner_index: u32) -> vec2<f32> {

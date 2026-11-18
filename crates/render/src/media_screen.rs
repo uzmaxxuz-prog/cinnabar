@@ -138,6 +138,7 @@ fn init_media_screen_gpu(
                 format: TextureFormat::Rgba8UnormSrgb,
                 usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             },
             TextureDataOrder::LayerMajor,
             &[0, 0, 0, 255],

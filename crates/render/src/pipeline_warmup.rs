@@ -190,9 +190,13 @@ type ViewKeys<'w, 's> = Query<
 fn extract_sample_request(
     main: Extract<Res<SampleCountPreflight>>,
     mut render: ResMut<SampleCountPreflight>,
+    device: Res<bevy::render::renderer::RenderDevice>,
 ) {
-    if render.requested() != main.requested() {
-        render.request(main.requested());
+    let requested = main.requested().map(|request| {
+        if device.is_webgpu_compatibility() { SampleCountRequest { samples: Msaa::Off, ..request } } else { request }
+    });
+    if render.requested() != requested {
+        render.request(requested);
     }
 }
 
@@ -202,11 +206,13 @@ pub(crate) fn requested_sample_mode(
     requested: Option<Msaa>,
     world_camera: bool,
     shader_pack: bool,
+    compatibility: bool,
 ) -> Option<Msaa> {
-    requested.filter(|_| world_camera && !shader_pack)
+    requested.filter(|_| world_camera && !shader_pack).map(|samples| if compatibility { Msaa::Off } else { samples })
 }
 
 fn collect_views(
+    device: Res<bevy::render::renderer::RenderDevice>,
     views: ViewKeys,
     preflight: Res<SampleCountPreflight>,
     mut registry: ResMut<WarmupRegistry>,
@@ -217,7 +223,7 @@ fn collect_views(
     registry.requested = None;
     for (camera, msaa, target, enhanced, shader_pack, world_camera) in &views {
         let key = WarmView {
-            msaa: *msaa,
+            msaa: if device.is_webgpu_compatibility() { Msaa::Off } else { *msaa },
             hdr: camera.hdr,
             enhanced: enhanced.is_some(),
             shader_pack,
@@ -228,6 +234,7 @@ fn collect_views(
             request.and_then(|request| request.for_view(camera.hdr, enhanced.is_some())),
             world_camera,
             shader_pack,
+            device.is_webgpu_compatibility(),
         );
         if requested.is_some() {
             registry.requested = request;

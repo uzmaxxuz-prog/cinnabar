@@ -125,6 +125,7 @@ fn world_model_uvs_rotate_top_and_bottom_by_position_and_preserve_side_and_stati
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
     });
     let texels = (0..16)
         .flat_map(|index| [17 + index * 13, 240 - index * 11, 30 + index * 7, 255])

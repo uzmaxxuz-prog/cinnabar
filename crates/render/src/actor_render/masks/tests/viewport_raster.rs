@@ -46,6 +46,7 @@ fn pixels(device: &RenderDevice, queue: &RenderQueue, mode: MaskDepth, paired: b
             format,
             usage,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
     };
     let depth_texture = texture(CORE_3D_DEPTH_FORMAT, TextureUsages::RENDER_ATTACHMENT);
@@ -101,20 +102,22 @@ fn pixels(device: &RenderDevice, queue: &RenderQueue, mode: MaskDepth, paired: b
         }],
     );
     let mut descriptor = actor_pipeline_descriptor(layout.clone());
-    MaskSpecializer
-        .specialize(
-            Key {
-                actor: ActorPipelineKey {
-                    msaa: Msaa::Off,
-                    hdr: false,
-                    enhanced: false,
-                    material: assets::EntityRenderMaterial::Default as u32,
-                },
-                depth: mode,
+    MaskSpecializer {
+        compatibility: false,
+    }
+    .specialize(
+        Key {
+            actor: ActorPipelineKey {
+                msaa: Msaa::Off,
+                hdr: false,
+                enhanced: false,
+                material: assets::EntityRenderMaterial::Default as u32,
             },
-            &mut descriptor,
-        )
-        .unwrap();
+            depth: mode,
+        },
+        &mut descriptor,
+    )
+    .unwrap();
     let shader = Handle::<Shader>::default();
     let cache = &mut *world.resource_mut::<PipelineCache>();
     cache.set_shader(
@@ -151,7 +154,7 @@ fn pixels(device: &RenderDevice, queue: &RenderQueue, mode: MaskDepth, paired: b
     prepass.depth_stencil.as_mut().unwrap().depth_compare = Some(CompareFunction::GreaterEqual);
     let prepass_id = cache.queue_render_pipeline(prepass);
     if paired {
-        descriptor.layout.push(dissolve_layout(false));
+        descriptor.layout.push(dissolve_layout(false, false));
     }
     let mask_id = cache.queue_render_pipeline(descriptor);
     let scene_id = cache.queue_render_pipeline(scene);
@@ -192,7 +195,7 @@ fn pixels(device: &RenderDevice, queue: &RenderQueue, mode: MaskDepth, paired: b
                 "mask sampled depth fixture",
                 &world
                     .resource::<PipelineCache>()
-                    .get_bind_group_layout(&dissolve_layout(false)),
+                    .get_bind_group_layout(&dissolve_layout(false, false)),
                 &[BindGroupEntry {
                     binding: 0,
                     resource: BindingResource::TextureView(&target.dissolve_view),

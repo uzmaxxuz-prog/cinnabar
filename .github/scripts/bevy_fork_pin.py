@@ -7,7 +7,7 @@ import tomllib
 
 from wgpu_fork_pin import compare_status, on_branch
 
-FORK_URL = "https://github.com/cinnabar-mc/bevy"
+FORK_URL = "https://github.com/uzmaxxuz-prog/bevy"
 
 
 def pin(manifest: dict) -> tuple[str, str, str]:
@@ -33,9 +33,14 @@ def check_lock(manifest: dict, lock: dict, rev: str) -> None:
     patches = manifest["patch"]["crates-io"]
     for package in lock["package"]:
         name = package["name"]
-        if package["version"] != version or not (name == "bevy" or name.startswith("bevy_")):
+        if not (name == "bevy" or name.startswith("bevy_")):
             continue
-        if name not in patches or package.get("source") != f"git+{FORK_URL}?rev={rev}#{rev}":
+        if package["version"] != version and name not in patches:
+            continue
+        if (
+            name not in patches or package["version"] != version
+            or package.get("source") != f"git+{FORK_URL}?rev={rev}#{rev}"
+        ):
             raise ValueError(f"{name} must share the Bevy fork patch and locked source")
 
 

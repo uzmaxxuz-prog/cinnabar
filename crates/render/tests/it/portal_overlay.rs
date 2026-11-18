@@ -63,6 +63,7 @@ fn entering_portal_samples_and_blends_the_pack_texture_with_native_opacity() {
                     format: wgpu::TextureFormat::Rgba8UnormSrgb,
                     usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                     view_formats: &[],
+                    texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
                 },
                 wgpu::util::TextureDataOrder::LayerMajor,
                 pixels,

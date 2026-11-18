@@ -195,6 +195,7 @@ pub(crate) fn motion_blur<const AFTER_PACK: bool>(
     }
     // Resolve only world colour, then write exposure back before sharp projected UI and hands.
     if scene.texture.sample_count() == 1 {
+        scene.canonical_texture(context.command_encoder());
         context.command_encoder().copy_texture_to_texture(
             scene.texture.as_image_copy(),
             target.main_texture().as_image_copy(),
@@ -202,7 +203,7 @@ pub(crate) fn motion_blur<const AFTER_PACK: bool>(
         );
     } else {
         let attachments = [Some(
-            scene.resolve_attachment(target.main_texture_view(), StoreOp::Store),
+            scene.resolve_attachment(context.command_encoder(), target.main_texture_view(), StoreOp::Store),
         )];
         context
             .command_encoder()
@@ -218,7 +219,7 @@ pub(crate) fn motion_blur<const AFTER_PACK: bool>(
                 multiview_mask: None,
             });
     }
-    let attachments = [Some(scene.color_attachment(target, false))];
+    let attachments = [Some(scene.color_attachment(context.command_encoder(), target, false))];
     let mut pass = context.begin_tracked_render_pass(RenderPassDescriptor {
         label: Some("camera motion blur"),
         color_attachments: &attachments,

@@ -124,6 +124,7 @@ fn items_and_particles_compose_native_rgb_in_darkness_and_daylight() {
                     format: wgpu::TextureFormat::Rgba8UnormSrgb,
                     usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                     view_formats: &[],
+                    texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
                 });
                 gpu.queue.write_texture(
                     texture.as_image_copy(),
@@ -319,6 +320,7 @@ fn particle_uvs_clamp_inside_their_texture_without_sampling_adjacent_atlas_sprit
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let mut texels = [0, 0, 255, 255].repeat(16);
     for (index, color) in [

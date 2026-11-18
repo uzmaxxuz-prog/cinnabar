@@ -7,13 +7,12 @@ use crate::queue_writes::ProfiledQueue as _;
 use bevy::{
     asset::{load_internal_asset, uuid_handle},
     camera::{MainPassResolutionOverride, Viewport},
-    core_pipeline::{Core3d, Core3dSystems, core_3d::CORE_3D_DEPTH_FORMAT},
+    core_pipeline::{core_3d::CORE_3D_DEPTH_FORMAT, Core3d, Core3dSystems},
     prelude::{
-        App, BevyError, Commands, Entity, FromWorld, Handle, IntoScheduleConfigs, Msaa, Plugin,
-        Query, Res, ResMut, Resource, Result, Shader, World, default,
+        default, App, BevyError, Commands, Entity, FromWorld, Handle, IntoScheduleConfigs, Msaa,
+        Plugin, Query, Res, ResMut, Resource, Result, Shader, World,
     },
     render::{
-        Render, RenderApp, RenderStartup, RenderSystems,
         camera::ExtractedCamera,
         extract_resource::ExtractResourcePlugin,
         render_resource::{
@@ -29,6 +28,7 @@ use bevy::{
         },
         renderer::{RenderContext, RenderDevice, RenderQueue, ViewQuery},
         view::{ViewDepthStencilTexture, ViewTarget},
+        Render, RenderApp, RenderStartup, RenderSystems,
     },
 };
 use render_scene::PanoramaScene;
@@ -162,6 +162,7 @@ fn texture_array(
             format: TextureFormat::Rgba8UnormSrgb,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             view_formats: &[],
+            texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
         },
         TextureDataOrder::LayerMajor,
         pixels,
@@ -466,7 +467,7 @@ fn draw_panorama(world: &World, query: ViewQuery<PanoramaQuery>, mut context: Re
         || target.get_color_attachment(),
         |scene| {
             scene.resume();
-            scene.color_attachment(target, false)
+            scene.color_attachment(context.command_encoder(), target, false)
         },
     );
     let viewport = Viewport::from_viewport_and_override(camera.viewport.as_ref(), resolution).map(

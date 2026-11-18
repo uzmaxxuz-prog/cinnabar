@@ -21,7 +21,7 @@ struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) color: vec4<f32>,
     @location(1) uv: vec2<f32>,
-    @location(2) @interpolate(flat) style: vec4<f32>,
+    @location(2) @interpolate(flat, either) style: vec4<f32>,
 }
 
 const TAU: f32 = 6.2831853;
@@ -67,7 +67,8 @@ fn mod_primitive_vertex(@builtin(vertex_index) index: u32) -> VertexOutput {
     }
     out.color = v.color;
     out.uv = v.uv.xy;
-    out.style = v.style;
+    // Triangle-list style retains the core path's first-corner choice.
+    out.style = vertices[(index / 3u) * 3u].style;
     return out;
 }
 

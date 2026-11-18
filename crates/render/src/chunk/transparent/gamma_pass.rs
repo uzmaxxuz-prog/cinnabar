@@ -172,7 +172,7 @@ pub(crate) fn gamma_transparent<const NAMETAGS_ONLY: bool, const AFTER_PACK: boo
     // concurrently. Keep their ordered colour-space passes in one encoder without a worker wait.
     let mut ranges = ranges().peekable();
     while let Some(gamma) = ranges.peek().map(|(_, gamma)| *gamma) {
-        let attachments = [Some(scene.color_attachment(target, gamma))];
+        let attachments = [Some(scene.color_attachment(render_context.command_encoder(), target, gamma))];
         let mut pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
             label: Some("sorted ordinary transparent colour-space range"),
             color_attachments: &attachments,

@@ -193,6 +193,7 @@ impl AuthoredUpload {
                 },
                 usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
                 view_formats: &[],
+                texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
             })
         });
         let views = std::array::from_fn(|index| {

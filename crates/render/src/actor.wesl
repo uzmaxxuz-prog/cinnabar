@@ -66,7 +66,11 @@ struct VertexOutput {
     @location(13) @interpolate(flat) chart_bounds: vec4<u32>,
     @if(ACTOR_MOTION)
     @location(6) previous_clip: vec4<f32>,
+    @if(WEBGPU_COMPATIBILITY)
+    overlay_bits: u32,
 }
+
+// ACTOR_STAGE_INTERFACE
 
 // Geometry texture dimensions use u16 coordinates; both charts fit one flat varying.
 @if(ALPHA_TO_COVERAGE)
@@ -153,7 +157,7 @@ fn instance_row(base: u32, row: u32) -> vec4<f32> {
 fn actor_vertex(
     @builtin(vertex_index) vertex_index: u32,
     @builtin(instance_index) instance_index: u32,
-) -> VertexOutput {
+) -> StageOutput {
     let instance_base = instance_index * ACTOR_GPU_INSTANCE_WORDS;
     let previous_bone_base = instance_words[instance_base + 12u];
     let current_bone_base = instance_words[instance_base + 13u];
@@ -167,13 +171,19 @@ fn actor_vertex(
     out.skin_info.x = texture_layer;
     out.tint = instance_words[instance_base + 18u];
     out.overlay = unpack4x8unorm(overlay_rgba8);
+    @if(WEBGPU_COMPATIBILITY)
+    out.overlay_bits = overlay_rgba8;
     out.light = instance_words[instance_base + 24u];
     out.native_lighting = vec3(1.0);
     out.back_native_lighting = vec3(1.0);
     out.material_parameters.y = 0u;
     out.multitexture_layers = vec2(instance_words[instance_base + 25u], instance_words[instance_base + 26u]);
     out.material = instance_words[instance_base + 27u];
-    if ((out.material & ACTOR_MATERIAL_DISABLE_OVERLAY_FLAG) != 0u) { out.overlay = vec4(0.0); }
+    if ((out.material & ACTOR_MATERIAL_DISABLE_OVERLAY_FLAG) != 0u) {
+        out.overlay = vec4(0.0);
+        @if(WEBGPU_COMPATIBILITY)
+        out.overlay_bits = 0u;
+    }
     let has_glint = (out.material & ACTOR_MATERIAL_KIND_MASK) == ACTOR_MATERIAL_GLINT || word_f32(instance_base + 35u) != 0.0;
     out.skin_info.z = select(0xffffffffu, instance_index, has_glint);
     out.material_parameters.x = instance_words[instance_base + 28u];
@@ -182,6 +192,14 @@ fn actor_vertex(
     let uv_offset = vec2(word_f32(instance_base + 20u), word_f32(instance_base + 21u));
     let uv_scale = vec2(word_f32(instance_base + 22u), word_f32(instance_base + 23u));
     out.skin_info.w = select(0u, 1u, any(uv_offset != vec2(0.0)) || any(uv_scale != vec2(1.0)));
+    let triangle_first = span.first_vertex + (vertex_index / 3u) * 3u;
+    // Even padding vertices share the first corner's flat metadata.
+    if (triangle_first < span.first_vertex + span.vertex_count) {
+        out.skin_info.y = 1u;
+        out.material_parameters.y = vertex_words[triangle_first * ACTOR_RIG_VERTEX_WORDS + 11u];
+        @if(ALPHA_TO_COVERAGE)
+        out.chart_bounds = actor_triangle_chart_bounds(triangle_first, span.first_vertex + span.vertex_count - 1u, texture_layer);
+    }
     if (vertex_index >= span.vertex_count) {
         out.position = vec4(2.0, 2.0, 2.0, 1.0);
         @if(ACTOR_MOTION)
@@ -190,14 +208,10 @@ fn actor_vertex(
         out.previous_clip = out.position;
         out.uv = vec4(0.0);
         out.back_uv = vec2(0.0);
-        out.skin_info.y = 0u;
         @if(!ACTOR_MOTION)
         out.world_normal = vec3(0.0, 1.0, 0.0);
-        return out;
+        return pack_stage(out);
     }
-
-    @if(ALPHA_TO_COVERAGE)
-    out.chart_bounds = actor_triangle_chart_bounds(span.first_vertex + (vertex_index / 3u) * 3u, span.first_vertex + span.vertex_count - 1u, texture_layer);
 
     // ActorRigVertex uses its Rust stride for both the actor and hand vertex pullers.
     let vertex_base = (span.first_vertex + vertex_index) * ACTOR_RIG_VERTEX_WORDS;
@@ -227,7 +241,7 @@ fn actor_vertex(
     // A one-sided plane's back keeps its sentinel so the fragment stage can discard it.
     out.back_uv = select(uv_offset + raw_back_uv * uv_scale, raw_back_uv, raw_back_uv.x < -1.0e8);
     let bone_index = vertex_words[vertex_base + 10u];
-    out.material_parameters.y = vertex_words[vertex_base + 11u];
+    let local_surface = vertex_words[vertex_base + 11u];
     let previous_bone = previous_bones[previous_bone_base + bone_index];
     @if(!COMPACT_BONES)
     let current_bone = current_bones[current_bone_base + bone_index];
@@ -260,11 +274,10 @@ fn actor_vertex(
     out.world_normal = world_normal;
     out.native_lighting = actor_lighting(out.light, world_normal, out.overlay.a) * light_color_multiplier;
     out.back_native_lighting = out.native_lighting;
-    if (out.material_parameters.y != 0u) {
+    if (local_surface != 0u) {
         out.back_native_lighting = actor_lighting(out.light, -world_normal, out.overlay.a) * light_color_multiplier;
     }
-    out.skin_info.y = 1u;
-    return out;
+    return pack_stage(out);
 }
 
 // Player-skin layers carry their resolution class in the top byte; class 0 samples `skins`.
@@ -416,25 +429,32 @@ fn actor_colour(input: VertexOutput, front: bool) -> vec4<f32> {
 }
 
 @fragment
-fn actor_fragment(input: VertexOutput, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
+fn actor_fragment(stage: StageOutput, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
+    let input = unpack_stage(stage);
     return actor_colour(input, front);
 }
 
-@if(MASK_DISSOLVE && !MASK_DISSOLVE_MSAA)
+@if(MASK_DISSOLVE && (!MASK_DISSOLVE_MSAA || WEBGPU_COMPATIBILITY))
 @group(3) @binding(0) var mask_dissolve_depth: texture_depth_2d;
-@if(MASK_DISSOLVE_MSAA)
+@if(MASK_DISSOLVE_MSAA && !WEBGPU_COMPATIBILITY)
 @group(3) @binding(0) var mask_dissolve_depth: texture_depth_multisampled_2d;
 
+@if(MASK_DISSOLVE && WEBGPU_COMPATIBILITY)
+@group(3) @binding(1) var mask_dissolve_sampler: sampler;
+
 @fragment
-fn actor_mask_fragment(input: VertexOutput, @builtin(front_facing) front: bool,
-    @if(MASK_DISSOLVE_MSAA) @builtin(sample_index) sample_index: u32,
+fn actor_mask_fragment(stage: StageOutput, @builtin(front_facing) front: bool,
+    @if(MASK_DISSOLVE_MSAA && !WEBGPU_COMPATIBILITY) @builtin(sample_index) sample_index: u32,
 ) -> @location(0) vec4<f32> {
+    let input = unpack_stage(stage);
     // The scene's function owns every material rejection and multisample cutout footprint.
     let colour = actor_colour(input, front);
-    @if(MASK_DISSOLVE && !MASK_DISSOLVE_MSAA)
+    @if(MASK_DISSOLVE && !MASK_DISSOLVE_MSAA && !WEBGPU_COMPATIBILITY)
     let companion_depth = textureLoad(mask_dissolve_depth, vec2<i32>(input.position.xy), 0);
-    @if(MASK_DISSOLVE_MSAA)
+    @if(MASK_DISSOLVE_MSAA && !WEBGPU_COMPATIBILITY)
     let companion_depth = textureLoad(mask_dissolve_depth, vec2<i32>(input.position.xy), i32(sample_index));
+    @if(MASK_DISSOLVE && WEBGPU_COMPATIBILITY)
+    let companion_depth = textureSampleLevel(mask_dissolve_depth, mask_dissolve_sampler, input.position.xy / vec2<f32>(textureDimensions(mask_dissolve_depth)), 0.0);
     @if(MASK_DISSOLVE)
     if (companion_depth == 0.0 || input.position.z != companion_depth) { discard; }
     @if(MASK_BLEND)
@@ -455,7 +475,8 @@ fn actor_motion_velocity(input: VertexOutput) -> vec2<f32> {
 
 @if(ACTOR_MOTION)
 @fragment
-fn actor_motion_fragment(input: VertexOutput, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
+fn actor_motion_fragment(stage: StageOutput, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
+    let input = unpack_stage(stage);
     // The same artwork and discard rules retain cutouts and multisample alpha coverage.
     let colour = actor_colour(input, front);
     return vec4(actor_motion_velocity(input), 1.0, colour.a);

@@ -3,6 +3,16 @@
 use bevy::render::settings::WgpuSettings;
 use std::path::PathBuf;
 
+/// Whether a browser adapter lacks core texture-view reinterpretation.
+/// Texture paths must still check their individual downlevel capability flags.
+pub fn webgpu_compatibility(adapter: &wgpu::Adapter) -> bool {
+    adapter.get_info().backend == wgpu::Backend::BrowserWebGpu
+        && !adapter
+            .get_downlevel_capabilities()
+            .flags
+            .contains(wgpu::DownlevelFlags::VIEW_FORMATS)
+}
+
 /// Sub-allocation block sizes for the device's memory allocator: at most 16 MiB, so a block
 /// holds about one full-screen target and anything larger gets memory of its own.
 const SUBALLOCATED_BLOCK_BYTES: std::ops::Range<u64> = (4 << 20)..(16 << 20);

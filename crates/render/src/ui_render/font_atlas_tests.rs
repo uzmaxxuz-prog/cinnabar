@@ -1,4 +1,4 @@
-use assets::{FontPixels, FontTexturePage, GlyphMetrics, RuntimeFontCatalog, encode_font_catalog};
+use assets::{encode_font_catalog, FontPixels, FontTexturePage, GlyphMetrics, RuntimeFontCatalog};
 use render_model::FontAtlasFrame;
 use render_model::{
     UiRenderBatch, UiRenderInput, UiRenderVertex, UiScissor, UiTextureCatalog, UiTexturePage,
@@ -224,6 +224,7 @@ fn raster(
         },
         usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     gpu.queue.write_texture(
         texture.as_image_copy(),
@@ -353,6 +354,7 @@ fn font_upload_burst_measurement() {
         format: wgpu::TextureFormat::R8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let mut atlas = FontAtlasFrame::default();
     let mut prepare_times = Vec::new();

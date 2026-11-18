@@ -1,5 +1,68 @@
 //! Allocation lifetime and native-pixel raster checks for reduced-world composition.
 
+mod encoding_tests {
+    use super::*;
+
+    #[test]
+    fn native_ui_presentation_encodes_only_unorm_window_outputs() {
+        let Some(mut app) = raster_fixture() else { return; };
+        let world = app.sub_app_mut(RenderApp).world_mut();
+        let entity = view(world, [2, 2], [1, 1]);
+        let mut previous_pipeline = None;
+        for format in [TextureFormat::Rgba8UnormSrgb, TextureFormat::Rgba8Unorm] {
+            let device = world.resource::<RenderDevice>().clone();
+            let texture = device.create_texture(&TextureDescriptor {
+                label: Some("native UI output encoding witness"),
+                size: Extent3d { width: 2, height: 2, depth_or_array_layers: 1 },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format,
+                usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
+                view_formats: &[],
+                texture_binding_view_dimension: None,
+            });
+            let target = world.get::<ExtractedCamera>(entity).unwrap().target.clone().unwrap();
+            world.resource_mut::<ViewTargetAttachments>().insert(target, OutputColorAttachment::new(texture.create_view(&default()), format));
+            world.run_system_once(prepare_view_targets).unwrap();
+            world.run_system_once(prepare_native_ui_targets).unwrap();
+            ready_pipelines(world);
+            let native = world.get::<NativeUiTarget>(entity).unwrap();
+            assert_eq!(native.needs_srgb_encoding, !format.is_srgb());
+            if let Some(previous) = previous_pipeline {
+                assert_ne!(native.present_pipeline, previous);
+            }
+            previous_pipeline = Some(native.present_pipeline);
+            let (_, buffers) = crate::render_test_support::record(world, &device, |world, context| {
+                let native = world.get::<NativeUiTarget>(entity).unwrap();
+                let target = world.get::<ViewTarget>(entity).unwrap();
+                {
+                    let attachments = [Some(RenderPassColorAttachment {
+                        view: &native.views[0],
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: Operations {
+                            load: LoadOp::Clear(wgpu::Color { r: 0.1, g: 0.25, b: 0.6, a: 0.37 }),
+                            store: StoreOp::Store,
+                        },
+                    })];
+                    let _pass = context.command_encoder().begin_render_pass(&RenderPassDescriptor {
+                        color_attachments: &attachments,
+                        ..default()
+                    });
+                }
+                native.ready.store(true, Ordering::Relaxed);
+                assert!(native.present(world, context, target));
+            });
+            world.resource::<RenderQueue>().submit(buffers);
+            for pixel in pixels(world, entity) {
+                assert!(pixel.iter().zip([89_u8, 137, 203, 94]).all(|(a, b)| a.abs_diff(b) <= 1), "output {format:?}: {pixel:?}");
+            }
+        }
+    }
+
+}
+
 use super::*;
 use bevy::{
     asset::AssetPlugin,
@@ -120,6 +183,7 @@ fn view_target(world: &mut World, output: [u32; 2], internal: [u32; 2]) -> Entit
         // Deliberately not sampleable: the production path must never read its output.
         usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     world.init_resource::<ViewTargetAttachments>();
     world.resource_mut::<ViewTargetAttachments>().insert(
@@ -293,6 +357,7 @@ fn screen_ui_layers_stay_native_at_ten_and_fifty_percent_and_follow_output_resiz
             format: render_scene::SCENE_COLOR_FORMAT,
             usage: TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
     let target = world
         .get::<ExtractedCamera>(entity)

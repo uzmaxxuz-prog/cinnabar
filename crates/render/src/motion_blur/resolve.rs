@@ -1,6 +1,6 @@
 //! Exact per-pixel coverage and depth resolve shared by every exposure tap.
 
-use super::{MSAA_SHADER, SHADER, history::ExposureUniform};
+use super::{history::ExposureUniform, MSAA_SHADER, SHADER};
 use bevy::{
     prelude::*,
     render::{render_resource::*, renderer::RenderDevice},
@@ -52,6 +52,7 @@ impl ResolvedInputs {
                     format,
                     usage: TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT,
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 })
             })
         };

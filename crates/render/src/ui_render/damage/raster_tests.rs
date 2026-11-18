@@ -7,7 +7,7 @@ mod repeat_tests;
 mod shadow_tests;
 
 use super::*;
-use fixture::{Raster, SIDE, buffer, target};
+use fixture::{buffer, target, Raster, SIDE};
 
 #[path = "outline_raster.rs"]
 mod outline_raster;
@@ -603,6 +603,7 @@ fn oversized_layout_on_small_targets_emits_valid_scissors() {
             format: super::super::composite::UI_LAYER_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         });
         let validation_scope = raster
             .gpu
@@ -803,15 +804,13 @@ fn skinned_ui_model_matches_projected_gpu_pixels() {
     let mut animated = scene();
     animated.textures = Arc::new(
         UiTextureCatalog::new(
-            vec![
-                UiTexturePage::owned(
-                    [2, 2],
-                    Arc::from([
-                        230, 40, 30, 255, 20, 210, 60, 255, 30, 70, 230, 255, 220, 200, 20, 255,
-                    ]),
-                )
-                .unwrap(),
-            ],
+            vec![UiTexturePage::owned(
+                [2, 2],
+                Arc::from([
+                    230, 40, 30, 255, 20, 210, 60, 255, 30, 70, 230, 255, 220, 200, 20, 255,
+                ]),
+            )
+            .unwrap()],
             1,
         )
         .unwrap(),

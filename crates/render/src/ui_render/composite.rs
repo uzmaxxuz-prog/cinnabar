@@ -369,6 +369,7 @@ pub(crate) fn prepare_ui_layers(
             )
         });
         let direct_output = unblended
+            && !target.needs_srgb_encoding()
             && target.out_texture().is_some_and(|output| {
                 writers[&output.id()] == 1
                     && crate::render_bounds::extent(output) == [size.width, size.height]
@@ -473,6 +474,7 @@ fn retained_layer(device: &RenderDevice, size: Extent3d) -> Option<RetainedLayer
                 format: UI_LAYER_FORMAT,
                 usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             })
         })?;
     let view = texture.create_view(&TextureViewDescriptor::default());
@@ -891,6 +893,7 @@ fn observe_ui_output(
             blend_state,
             samples: 1,
             source_space: bevy::render::view::ResolvedCompositingSpace::space(space),
+            needs_srgb_encoding: target.needs_srgb_encoding(),
         },
     );
     layer.content_presented.store(

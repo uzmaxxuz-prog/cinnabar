@@ -23,6 +23,7 @@ fn texture(gpu: &Gpu, size: [u32; 2], pixels: &[u8]) -> wgpu::TextureView {
                 format: wgpu::TextureFormat::Rgba8UnormSrgb,
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             },
             wgpu::util::TextureDataOrder::LayerMajor,
             pixels,

@@ -111,6 +111,7 @@ pub(crate) fn depth_smaa<const AFTER_PACK: bool>(
         pass.draw(0..3, 0..1);
     }
     {
+        scene.canonical_written();
         let attachments = [Some(RenderPassColorAttachment {
             view: scene.color_view(false),
             depth_slice: None,

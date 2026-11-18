@@ -68,6 +68,7 @@ fn production_fragments_discard_coverage_before_cosmetic_alpha() {
                         format: wgpu::TextureFormat::Rgba8Unorm,
                         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                         view_formats: &[],
+                        texture_binding_view_dimension: None,
                     },
                     wgpu::util::TextureDataOrder::LayerMajor,
                     &[255, 255, 255, coverage],

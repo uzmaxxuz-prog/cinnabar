@@ -205,6 +205,7 @@ fn upload_pixels(
             format,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         },
         TextureDataOrder::LayerMajor,
         rgba8,

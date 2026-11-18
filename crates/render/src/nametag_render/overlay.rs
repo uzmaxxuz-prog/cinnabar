@@ -110,6 +110,7 @@ pub(super) fn prepare(
             format: render_scene::SCENE_COLOR_FORMAT.remove_srgb_suffix(),
             usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         };
         let size = target.main_texture().size();
         let bytes = u64::from(size.width) * u64::from(size.height) * 4 * u64::from(msaa.samples());

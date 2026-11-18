@@ -69,6 +69,7 @@ fn texture(device: &wgpu::Device, size: [u32; 2], format: wgpu::TextureFormat) -
                 wgpu::TextureUsages::COPY_DST
             },
         view_formats: &[],
+        texture_binding_view_dimension: None,
     })
 }
 

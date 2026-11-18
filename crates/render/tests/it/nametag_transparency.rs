@@ -51,6 +51,7 @@ fn transparent_nametag_plate_preserves_world_color_and_alpha() {
         format: wgpu::TextureFormat::Rgba8Unorm,
         usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let mut glyphs = vec![0; 16 * 8 * 4];
     for y in 1..7 {

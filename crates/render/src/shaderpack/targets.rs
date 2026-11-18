@@ -55,6 +55,7 @@ fn target(
         format,
         usage,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     });
     let view = texture.create_view(&Default::default());
     Target { texture, view }
@@ -253,6 +254,7 @@ impl ViewTargets {
                             TextureUsages::empty()
                         },
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 });
                 let view = texture.create_view(&Default::default());
                 (texture, view)
@@ -272,6 +274,7 @@ impl ViewTargets {
                         format: image.format(),
                         usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
                         view_formats: &[],
+                        texture_binding_view_dimension: None,
                     });
                     let view = texture.create_view(&Default::default());
                     Target { texture, view }

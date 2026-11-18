@@ -47,6 +47,7 @@ fn raster(gpu: &Gpu, model: &DroppedItemModel, eye: Vec3, samples: u32, cull: bo
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
+            texture_binding_view_dimension: Some(wgpu::TextureViewDimension::D2Array),
         },
         wgpu::util::TextureDataOrder::LayerMajor,
         &atlas,
@@ -97,6 +98,7 @@ fn raster(gpu: &Gpu, model: &DroppedItemModel, eye: Vec3, samples: u32, cull: bo
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         })
         .create_view(&default());
     let bindings = [

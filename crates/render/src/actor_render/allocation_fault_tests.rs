@@ -9,7 +9,7 @@ use bevy::{
     render::{
         batching::gpu_preprocessing::GpuPreprocessingMode,
         render_phase::{BinnedPhaseItem, ViewBinnedRenderPhases, ViewSortedRenderPhases},
-        view::{ExtractedView, ViewUniforms, prepare_view_uniforms},
+        view::{prepare_view_uniforms, ExtractedView, ViewUniforms},
     },
 };
 use std::{cell::RefCell, rc::Rc};
@@ -205,6 +205,7 @@ fn execute_draws(world: &mut World) {
                 format,
                 usage: TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             })
             .create_view(&Default::default())
     };

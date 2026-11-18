@@ -52,7 +52,7 @@ mod page_uniform_tests;
 #[path = "ui_render/target.rs"]
 mod target;
 #[path = "ui_render/textures.rs"]
-mod textures;
+pub(crate) mod textures;
 #[path = "ui_render/upscale.rs"]
 mod upscale;
 pub(crate) use textures::DeviceObservation;

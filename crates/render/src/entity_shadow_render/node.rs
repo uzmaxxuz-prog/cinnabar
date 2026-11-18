@@ -40,7 +40,7 @@ pub(crate) fn entity_shadows(
     ) else {
         return Ok(());
     };
-    let colour = scene.color_attachment(target, true);
+    let colour = scene.color_attachment(context.command_encoder(), target, true);
     let mut pass = context.begin_tracked_render_pass(RenderPassDescriptor {
         label: Some("entity shadows"),
         color_attachments: &[Some(colour)],

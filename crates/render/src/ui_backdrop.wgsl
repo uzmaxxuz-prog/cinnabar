@@ -20,7 +20,7 @@ struct BackdropOutput {
     // Area coverage times opacity.
     @location(0) coverage: f32,
     // Blur in physical pixels, saturation and brightness; constant across a shape.
-    @location(1) @interpolate(flat) paint: vec3<f32>,
+    @location(1) @interpolate(flat, either) paint: vec3<f32>,
 };
 
 // Matches `ui_vertex` in ui.wgsl: positions are physical pixels times W.

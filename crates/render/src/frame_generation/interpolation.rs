@@ -139,6 +139,7 @@ fn texture(
             | wgpu::TextureUsages::TEXTURE_BINDING
             | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
+        texture_binding_view_dimension: None,
     })
 }
 
@@ -292,6 +293,7 @@ impl Interpolation {
             format: super::COLOR_FORMAT,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
+            texture_binding_view_dimension: None,
         }));
     }
 
@@ -388,6 +390,7 @@ impl Interpolation {
                 format: color.format(),
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             }));
             reset = true;
         }

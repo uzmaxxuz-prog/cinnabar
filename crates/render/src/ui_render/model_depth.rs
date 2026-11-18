@@ -68,6 +68,7 @@ impl UiModelDepths {
                     format: CORE_3D_DEPTH_FORMAT,
                     usage: TextureUsages::RENDER_ATTACHMENT,
                     view_formats: &[],
+                    texture_binding_view_dimension: None,
                 })
             })
         }) else {
@@ -213,6 +214,7 @@ mod tests {
                 format: super::super::composite::UI_LAYER_FORMAT,
                 usage: TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
+                texture_binding_view_dimension: None,
             });
             let default_view = texture.create_view(&TextureViewDescriptor::default());
             super::super::composite::UiLayerTexture::detached(texture, default_view)

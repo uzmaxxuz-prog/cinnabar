@@ -63,12 +63,12 @@ struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     // Keep edge samples inside the item's atlas region under MSAA.
     @location(0) @interpolate(perspective, centroid) uv: vec4<f32>,
-    @location(1) @interpolate(flat) skin_layer: u32,
-    @location(2) @interpolate(flat) valid: u32,
+    @location(1) @interpolate(flat, either) skin_layer: u32,
+    @location(2) @interpolate(flat, either) valid: u32,
     @location(3) @interpolate(perspective, centroid) back_uv: vec2<f32>,
-    @location(4) @interpolate(flat) shade: f32,
+    @location(4) @interpolate(flat, either) shade: f32,
     // Instance index whose glint words apply, or MAX without glint.
-    @location(5) @interpolate(flat) glint_instance: u32,
+    @location(5) @interpolate(flat, either) glint_instance: u32,
 }
 
 fn word_f32(index: u32) -> f32 {
@@ -128,6 +128,26 @@ fn hand_vertex(
     var out: VertexOutput;
     out.skin_layer = texture_layer;
     out.shade = 1.0;
+    let triangle_first = span.first_vertex + (vertex_index / 3u) * 3u;
+    out.valid = select(0u, 1u, triangle_first < span.first_vertex + span.vertex_count);
+    if (out.valid != 0u && hand_light.java_lights[0].w != 0.0) {
+        // Flat First shading depends on both the first corner's normal and its bone.
+        let first_base = triangle_first * ACTOR_RIG_VERTEX_WORDS;
+        let first_bone = vertex_words[first_base + 10u];
+        let previous_matrix = previous_bones[previous_bone_base + first_bone];
+        let current_matrix = current_bone(current_bone_base + first_bone);
+        let bone = transpose(mat3x3(
+            mix(previous_matrix.row_0.xyz, current_matrix.row_0.xyz, partial_tick),
+            mix(previous_matrix.row_1.xyz, current_matrix.row_1.xyz, partial_tick),
+            mix(previous_matrix.row_2.xyz, current_matrix.row_2.xyz, partial_tick),
+        ));
+        let placement = transpose(mat3x3(instance_row(instance_base, 0u).xyz, instance_row(instance_base, 1u).xyz, instance_row(instance_base, 2u).xyz));
+        let normal = vec3(bitcast<f32>(vertex_words[first_base + 3u]), bitcast<f32>(vertex_words[first_base + 4u]), bitcast<f32>(vertex_words[first_base + 5u]));
+        let item = (texture_layer & hand_material.texture_flags.x) != 0u;
+        let offhand = (texture_layer & hand_material.texture_flags.y) != 0u;
+        let light_index = select(0u, select(1u, 2u, offhand), item);
+        out.shade = java_shade(java_normal(placement * bone, normal, hand_light.java_normal_axes[light_index].xyz));
+    }
     let material = instance_words[instance_base + 27u];
     let has_glint = (material & ACTOR_MATERIAL_KIND_MASK) == ACTOR_MATERIAL_GLINT || word_f32(instance_base + 35u) != 0.0;
     out.glint_instance = select(0xffffffffu, instance_index, has_glint);
@@ -135,7 +155,6 @@ fn hand_vertex(
         out.position = vec4(2.0, 2.0, 2.0, 1.0);
         out.uv = vec4(0.0);
         out.back_uv = vec2(0.0);
-        out.valid = 0u;
         return out;
     }
 
@@ -163,22 +182,6 @@ fn hand_vertex(
     let placement = BoneMatrix(instance_row(instance_base, 0u), instance_row(instance_base, 1u), instance_row(instance_base, 2u));
     let world = vec4(placed_point(placement, posed), 1.0);
     out.position = view.clip_from_hand * world;
-    if (hand_light.java_lights[0].w != 0.0) {
-        let previous_matrix = previous_bones[previous_bone_base + bone_index];
-        let current_matrix = current_bone(current_bone_base + bone_index);
-        let bone = transpose(mat3x3(
-            mix(previous_matrix.row_0.xyz, current_matrix.row_0.xyz, partial_tick),
-            mix(previous_matrix.row_1.xyz, current_matrix.row_1.xyz, partial_tick),
-            mix(previous_matrix.row_2.xyz, current_matrix.row_2.xyz, partial_tick),
-        ));
-        let placement = transpose(mat3x3(instance_row(instance_base, 0u).xyz, instance_row(instance_base, 1u).xyz, instance_row(instance_base, 2u).xyz));
-        let normal = vec3(bitcast<f32>(vertex_words[vertex_base + 3u]), bitcast<f32>(vertex_words[vertex_base + 4u]), bitcast<f32>(vertex_words[vertex_base + 5u]));
-        let item = (texture_layer & hand_material.texture_flags.x) != 0u;
-        let offhand = (texture_layer & hand_material.texture_flags.y) != 0u;
-        let light_index = select(0u, select(1u, 2u, offhand), item);
-        out.shade = java_shade(java_normal(placement * bone, normal, hand_light.java_normal_axes[light_index].xyz));
-    }
-    out.valid = 1u;
     return out;
 }
 

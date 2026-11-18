@@ -156,6 +156,7 @@ pub(super) fn world_draw<const OVERLAY: bool>(
         let Some(color) = crate::scene_target::retained_color_attachment(
             world,
             entity,
+            context.command_encoder(),
             target,
             transparent && !camera.hdr,
         ) else {
