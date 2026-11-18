@@ -32,6 +32,7 @@ pub(crate) fn profiled_device(
         })
         .add_plugins(bevy::asset::AssetPlugin::default())
         .add_plugins(bevy::mesh::MeshPlugin)
+        .add_plugins(bevy::image::ImagePlugin::default())
         .add_plugins(RenderPlugin {
             render_creation: RenderCreation::manual(
                 RenderDevice::new(device),
