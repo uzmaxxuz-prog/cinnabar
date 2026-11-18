@@ -519,6 +519,10 @@ impl<'a> UiTarget<'a> {
             NativeUiTarget::post_process_write,
         )
     }
+    /// Whether the final output needs shader encoding, independently of the UI scene storage.
+    pub(crate) fn needs_srgb_encoding(self) -> bool {
+        self.output.needs_srgb_encoding()
+    }
     /// Borrows the native presentation attachment independently of scene size.
     pub(crate) fn out_texture(self) -> Option<&'a TextureView> {
         self.output.out_texture()
