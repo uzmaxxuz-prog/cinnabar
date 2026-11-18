@@ -2,6 +2,15 @@
 use bevy::render::renderer::{RenderDevice, RenderQueue};
 use serde_json::{Value, json};
 
+const READBACK_STRIDE: u32 = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+
+struct SampledFrame {
+    size: wgpu::Extent3d,
+    format: wgpu::TextureFormat,
+    stride: u32,
+    bytes: Vec<u8>,
+}
+
 /// Allocates, binds and samples the production dropped-item and UI single-layer arrays.
 /// Independent validation scopes preserve the original resource-specific errors.
 pub async fn production_arrays(
@@ -13,6 +22,7 @@ pub async fn production_arrays(
     let render_queue = RenderQueue::new(queue.clone());
     let mut tests = Vec::new();
     let mut pixels = Vec::new();
+    let mut frames = Vec::new();
     let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("production array sampling fixture"),
         entries: &[wgpu::BindGroupLayoutEntry {
@@ -102,20 +112,38 @@ pub async fn production_arrays(
                 texture.size(),
             );
         }
-        let actual = sample_pixel(device, queue, &layout, &binding).await;
+        let frame = sample_pixel(device, queue, &layout, &binding).await;
+        let actual: [u8; 4] = frame.bytes[..4].try_into().expect("RGBA pixel");
         let expected = if id == "dropped-item-one-layer" {
             [55, 13, 4, 255]
         } else {
             [128, 64, 32, 255]
         };
-        let ok = actual
+        let ok = actual[..3]
             .iter()
-            .zip(expected)
-            .all(|(actual, expected)| actual.abs_diff(expected) <= 1);
+            .zip(&expected[..3])
+            .all(|(actual, expected)| actual.abs_diff(*expected) <= 1)
+            && actual[3] == expected[3];
         tests.push(json!({"id":format!("{id}-sample"),"ok":ok}));
         pixels.push(json!({"id":id,"actual":actual,"expected":expected}));
+        let format = match frame.format {
+            wgpu::TextureFormat::Rgba8Unorm => "rgba8",
+            _ => unreachable!("array witness target must be RGBA8 UNORM"),
+        };
+        frames.push(json!({
+            "id": id,
+            "width": frame.size.width,
+            "height": frame.size.height,
+            "stride": frame.stride,
+            "format": format,
+            "origin": "top-left",
+            "transfer": "linear",
+            "alphaMode": "straight",
+            "premultiplySpace": "none",
+            "bytes": frame.bytes,
+        }));
     }
-    json!({"tests":tests,"pixelComparisons":pixels})
+    json!({"tests":tests,"pixelComparisons":pixels,"frames":frames})
 }
 
 /// Renders the bound array into an independent UNORM target and maps its actual GPU bytes.
@@ -124,7 +152,7 @@ async fn sample_pixel(
     queue: &wgpu::Queue,
     layout: &wgpu::BindGroupLayout,
     binding: &wgpu::BindGroup,
-) -> [u8; 4] {
+) -> SampledFrame {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("production array pixel witness"),
         source: wgpu::ShaderSource::Wgsl(
@@ -189,7 +217,7 @@ async fn sample_pixel(
     let view = target.create_view(&Default::default());
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("array sample pixel bytes"),
-        size: 256,
+        size: u64::from(READBACK_STRIDE) * u64::from(target.height()),
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     });
@@ -221,8 +249,8 @@ async fn sample_pixel(
             buffer: &buffer,
             layout: wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(256),
-                rows_per_image: Some(1),
+                bytes_per_row: Some(READBACK_STRIDE),
+                rows_per_image: Some(target.height()),
             },
         },
         target.size(),
@@ -242,5 +270,13 @@ async fn sample_pixel(
         .slice(..)
         .get_mapped_range()
         .expect("pixel bytes are mapped");
-    bytes[..4].try_into().expect("RGBA pixel")
+    let frame = SampledFrame {
+        size: target.size(),
+        format: target.format(),
+        stride: READBACK_STRIDE,
+        bytes: bytes.to_vec(),
+    };
+    drop(bytes);
+    buffer.unmap();
+    frame
 }
