@@ -68,7 +68,7 @@ fn shadow_fragment(in: VertexOutput,
     @if(!MULTISAMPLED && !WEBGPU_COMPATIBILITY)
     let depth = textureLoad(scene_depth, pixel, 0);
     @if(WEBGPU_COMPATIBILITY)
-    let depth = textureSampleLevel(scene_depth, depth_sampler, in.position.xy / vec2<f32>(textureDimensions(scene_depth)), 0.0);
+    let depth = textureSampleLevel(scene_depth, depth_sampler, in.position.xy / vec2<f32>(textureDimensions(scene_depth)), 0u);
     // Reverse depth: zero is the sky.
     if depth <= 0.0 {
         discard;

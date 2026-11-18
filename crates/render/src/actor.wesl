@@ -454,7 +454,7 @@ fn actor_mask_fragment(stage: StageOutput, @builtin(front_facing) front: bool,
     @if(MASK_DISSOLVE_MSAA && !WEBGPU_COMPATIBILITY)
     let companion_depth = textureLoad(mask_dissolve_depth, vec2<i32>(input.position.xy), i32(sample_index));
     @if(MASK_DISSOLVE && WEBGPU_COMPATIBILITY)
-    let companion_depth = textureSampleLevel(mask_dissolve_depth, mask_dissolve_sampler, input.position.xy / vec2<f32>(textureDimensions(mask_dissolve_depth)), 0.0);
+    let companion_depth = textureSampleLevel(mask_dissolve_depth, mask_dissolve_sampler, input.position.xy / vec2<f32>(textureDimensions(mask_dissolve_depth)), 0u);
     @if(MASK_DISSOLVE)
     if (companion_depth == 0.0 || input.position.z != companion_depth) { discard; }
     @if(MASK_BLEND)
