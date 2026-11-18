@@ -36,6 +36,9 @@ mod device_poll;
 pub mod device_settings;
 #[cfg(feature = "texture-compat-diagnostics")]
 pub mod texture_compat_diagnostics;
+#[cfg(all(test, feature = "texture-compat-diagnostics"))]
+#[path = "texture_compat_diagnostics/frame_tests.rs"]
+mod texture_compat_frame_tests;
 
 mod enhanced;
 mod entity_shadow_render;
