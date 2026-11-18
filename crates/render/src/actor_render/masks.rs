@@ -18,6 +18,9 @@ use mod_api::drawing::{
 };
 use std::collections::{BTreeMap, HashMap};
 
+mod dissolve_layout;
+use dissolve_layout::{DISSOLVE_GROUP, dissolve_layout};
+
 pub(crate) const FORMAT: TextureFormat = TextureFormat::Rgba8Unorm;
 const PLACEMENT_BYTES: u64 = std::mem::size_of::<[f32; 4]>() as u64;
 
@@ -51,33 +54,6 @@ fn placement_layout() -> BindGroupLayoutDescriptor {
             count: None,
         }],
     )
-}
-
-/// Sampled companion depth is present only in the later dissolve-colour pass.
-///
-/// `compatibility` mirrors the global `WEBGPU_COMPATIBILITY` shader def, which the pipeline
-/// cache derives from the device profile mode; it must not come from an independent cap such as
-/// `VIEW_FORMATS`, or the layout and the generated shader disagree on binding 1.
-fn dissolve_layout(multisampled: bool, compatibility: bool) -> BindGroupLayoutDescriptor {
-    let mut entries = vec![BindGroupLayoutEntry {
-        binding: 0,
-        visibility: ShaderStages::FRAGMENT,
-        ty: BindingType::Texture {
-            sample_type: TextureSampleType::Depth,
-            view_dimension: TextureViewDimension::D2,
-            multisampled: multisampled && !compatibility,
-        },
-        count: None,
-    }];
-    if compatibility {
-        entries.push(BindGroupLayoutEntry {
-            binding: 1,
-            visibility: ShaderStages::FRAGMENT,
-            ty: BindingType::Sampler(SamplerBindingType::NonFiltering),
-            count: None,
-        });
-    }
-    BindGroupLayoutDescriptor::new("mask dissolve depth", &entries)
 }
 
 /// Identifies the private companion independently of authored material flags.
@@ -770,7 +746,11 @@ fn draw(
                     pass.set_bind_group(0, binding, &[offset.offset]);
                     pass.set_bind_group(2, &target.placement_binding, &[]);
                     if !prepass && paired {
-                        pass.set_bind_group(3, target.dissolve_binding.as_ref().unwrap(), &[]);
+                        pass.set_bind_group(
+                            DISSOLVE_GROUP,
+                            target.dissolve_binding.as_ref().unwrap(),
+                            &[],
+                        );
                     }
                     pass.draw(0..span.vertex_count, span.first..span.first + span.count);
                 }

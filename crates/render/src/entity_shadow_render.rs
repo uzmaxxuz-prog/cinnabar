@@ -4,11 +4,9 @@
 use bevy::prelude::IntoScheduleConfigs;
 #[cfg(test)]
 use bevy::prelude::System;
-use bevy::render::render_resource::ShaderType;
 #[cfg(test)]
 use bevy::render::renderer::RenderQueue;
 use render_scene::EntityShadowScene;
-use std::num::NonZeroU64;
 
 #[cfg(test)]
 use bevy::prelude::IntoSystem;
@@ -26,33 +24,31 @@ use bevy::{
         camera::ExtractedCamera,
         extract_resource::ExtractResourcePlugin,
         render_resource::{
-            BindGroup, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
-            BindingResource, BindingType, BlendComponent, BlendFactor, BlendOperation, BlendState,
-            Buffer, BufferBindingType, BufferDescriptor, BufferId, BufferUsages,
-            CachedRenderPipelineId, ColorTargetState, ColorWrites, CompareFunction,
+            BindGroup, BindGroupEntry, BindGroupLayoutDescriptor, BindingResource, BlendComponent,
+            BlendFactor, BlendOperation, BlendState, Buffer, BufferDescriptor, BufferId,
+            BufferUsages, CachedRenderPipelineId, ColorTargetState, ColorWrites, CompareFunction,
             DepthStencilState, Face, FragmentState, LoadOp, MultisampleState, Operations,
             PipelineCache, PrimitiveState, RenderPassDepthStencilAttachment, RenderPassDescriptor,
-            RenderPipelineDescriptor, ShaderStages, StencilFaceState, StencilOperation,
-            StencilState, StoreOp, Texture, TextureDescriptor, TextureDimension, TextureFormat,
-            TextureSampleType, TextureUsages, TextureView, TextureViewDimension, TextureViewId,
-            VertexAttribute, VertexFormat, VertexState, VertexStepMode,
+            RenderPipelineDescriptor, StencilFaceState, StencilOperation, StencilState, StoreOp,
+            Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView,
+            TextureViewId, VertexAttribute, VertexFormat, VertexState, VertexStepMode,
         },
         renderer::{RenderContext, RenderDevice},
         view::{
-            ExtractedView, ViewDepthStencilTexture, ViewTarget, ViewUniform, ViewUniformOffset,
-            ViewUniforms,
+            ExtractedView, ViewDepthStencilTexture, ViewTarget, ViewUniformOffset, ViewUniforms,
         },
     },
 };
+#[cfg(test)]
+use render_model::EntityShadow;
 use render_model::{
-    EntityShadow, EntityShadowParams, SHADOW_VOLUME_VERTICES, entity_shadow_colour,
-    shadow_screen_rect, shadow_volume_mesh,
+    EntityShadowParams, SHADOW_VOLUME_VERTICES, entity_shadow_colour, shadow_screen_rect,
+    shadow_volume_mesh,
 };
 
 use {crate::scene_target::SceneTarget, render_scene::SkyKind};
 
 const SHADER: Handle<Shader> = uuid_handle!("6b0e5c1d-3f8a-4e27-9b41-2d7c0a5e8f13");
-const INSTANCE_BYTES: u64 = size_of::<EntityShadow>() as u64;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, SystemSet)]
 pub(crate) struct EntityShadowLabel;
@@ -124,6 +120,7 @@ pub(crate) fn install_graph(world: &mut World) {
 struct ShadowPassInstalled;
 
 mod gpu;
+mod layout;
 mod node;
 mod view;
 use gpu::*;

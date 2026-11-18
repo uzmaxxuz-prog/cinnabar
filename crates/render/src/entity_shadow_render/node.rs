@@ -1,4 +1,4 @@
-use super::*;
+use super::{*, layout::SHADOW_GROUP};
 
 type EntityShadowQuery = (
     &'static ExtractedCamera,
@@ -68,7 +68,7 @@ pub(crate) fn entity_shadows(
     pass.set_scissor_rect(rect.x, rect.y, rect.width, rect.height);
     pass.set_render_pipeline(pipeline);
     pass.set_stencil_reference(1);
-    pass.set_bind_group(0, bind_group, &[offset.offset]);
+    pass.set_bind_group(SHADOW_GROUP, bind_group, &[offset.offset]);
     pass.set_vertex_buffer(0, gpu.mesh.slice(..));
     pass.draw(0..SHADOW_VOLUME_VERTICES as u32, 0..gpu.count);
 

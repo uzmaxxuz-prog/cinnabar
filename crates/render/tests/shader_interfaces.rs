@@ -9,6 +9,8 @@
 )]
 #[path = "webgpu_compatibility/actor_pixels.rs"]
 mod actor_pixels;
+#[path = "../src/actor_render/masks/dissolve_layout.rs"]
+mod dissolve_layout;
 #[path = "webgpu_compatibility/hand_flat.rs"]
 mod hand_flat;
 #[path = "../src/material_shader.rs"]
@@ -17,6 +19,14 @@ mod material_shader;
 mod shader_safety;
 #[path = "it/support/shader_source.rs"]
 mod shader_source;
+#[path = "../src/entity_shadow_render/layout.rs"]
+mod shadow_layout;
+
+use bevy::render::render_resource::{
+    BindGroupLayoutEntry, BindingType, BufferBindingType, SamplerBindingType, ShaderStages,
+    TextureSampleType, TextureViewDimension,
+};
+use serde_json::{Value, json};
 
 struct Variant {
     name: String,
@@ -199,7 +209,7 @@ fn variants() -> Vec<Variant> {
 }
 
 /// Parses linked WGSL, never source-text approximations of its interface.
-fn linked(variant: &Variant, compatibility: bool) -> (String, naga::Module) {
+fn linked(variant: &Variant, compatibility: bool) -> (String, naga::Module, Vec<&'static str>) {
     let mut definitions = variant.definitions.clone();
     if compatibility {
         definitions.push("WEBGPU_COMPATIBILITY");
@@ -214,7 +224,7 @@ fn linked(variant: &Variant, compatibility: bool) -> (String, naga::Module) {
     )
     .validate(&module)
     .unwrap_or_else(|error| panic!("{}: {error:?}", variant.name));
-    (source, module)
+    (source, module, definitions)
 }
 
 /// Flattens the declared entry interface, retaining builtin and interpolation metadata.
@@ -368,7 +378,7 @@ fn vertex_buffer_layouts(
 #[test]
 fn linked_compatibility_interfaces_have_dense_locations_and_fit_the_device() {
     for variant in variants() {
-        let (_, module) = linked(&variant, true);
+        let (_, module, _) = linked(&variant, true);
         assert_stage_member_coverage(&variant, &module);
         for entry in &module.entry_points {
             if entry.stage != naga::ShaderStage::Fragment {
@@ -428,6 +438,71 @@ fn linked_compatibility_interfaces_have_dense_locations_and_fit_the_device() {
     }
 }
 
+/// Serializes the supported fixture bindings from the production descriptor entries.
+fn layout_binding(entry: &BindGroupLayoutEntry) -> Value {
+    assert!(
+        ShaderStages::VERTEX_FRAGMENT.contains(entry.visibility),
+        "unsupported fixture visibility: {:?}",
+        entry.visibility
+    );
+    let visibility: Vec<_> = [
+        (ShaderStages::FRAGMENT, "fragment"),
+        (ShaderStages::VERTEX, "vertex"),
+    ]
+    .into_iter()
+    .filter_map(|(stage, name)| entry.visibility.contains(stage).then_some(name))
+    .collect();
+    let mut binding = match entry.ty {
+        BindingType::Texture {
+            sample_type: TextureSampleType::Depth,
+            view_dimension: TextureViewDimension::D2,
+            multisampled,
+        } => json!({
+            "kind": "depthTexture",
+            "viewDimension": "d2",
+            "multisampled": multisampled,
+        }),
+        BindingType::Sampler(SamplerBindingType::NonFiltering) => {
+            json!({"kind": "sampler", "sampler": "nonFiltering"})
+        }
+        BindingType::Buffer { ty: BufferBindingType::Uniform, .. } => {
+            json!({"kind": "uniformBuffer"})
+        }
+        BindingType::Buffer {
+            ty: BufferBindingType::Storage { read_only: true },
+            ..
+        } => {
+            json!({"kind": "storageBuffer"})
+        }
+        other => panic!("unsupported fixture binding {other:?}"),
+    };
+    binding["binding"] = json!(entry.binding);
+    binding["visibility"] = json!(visibility);
+    binding
+}
+
+/// Describes only the private group used by this fixture's fragment and linked definitions.
+fn layout_groups(variant: &Variant, fragment: &str, definitions: &[&str]) -> Option<Value> {
+    let compatibility = definitions.contains(&"WEBGPU_COMPATIBILITY");
+    let (group, mut descriptor) = match fragment {
+        "actor_mask_fragment" if definitions.contains(&"MASK_DISSOLVE") => (
+            dissolve_layout::DISSOLVE_GROUP,
+            dissolve_layout::dissolve_layout(
+                definitions.contains(&"MASK_DISSOLVE_MSAA"),
+                compatibility,
+            ),
+        ),
+        "shadow_fragment" if variant.name.starts_with("entity-shadow-") => (
+            shadow_layout::SHADOW_GROUP,
+            shadow_layout::shadow_layout(definitions.contains(&"MULTISAMPLED"), compatibility),
+        ),
+        _ => return None,
+    };
+    descriptor.entries.sort_unstable_by_key(|entry| entry.binding);
+    let bindings: Vec<_> = descriptor.entries.iter().map(layout_binding).collect();
+    Some(json!([{"group": group, "label": descriptor.label, "bindings": bindings}]))
+}
+
 #[test]
 fn export_linked_browser_fixtures() {
     let Some(output) = std::env::var_os("CINNABAR_SHADER_FIXTURE_OUT") else {
@@ -440,7 +515,7 @@ fn export_linked_browser_fixtures() {
     manifest.extend(actor_pixels::export(&output));
     for variant in variants() {
         for (mode, compatibility) in [("core", false), ("compatibility", true)] {
-            let (source, module) = linked(&variant, compatibility);
+            let (source, module, definitions) = linked(&variant, compatibility);
             let file = format!("{}-{mode}.wgsl", variant.name);
             std::fs::write(output.join(&file), source).expect("write linked shader");
             let vertices: Vec<_> = module
@@ -455,7 +530,18 @@ fn export_linked_browser_fixtures() {
                 .collect();
             for vertex in &vertices {
                 for fragment in &fragments {
-                    manifest.push(serde_json::json!({"name": format!("{}-{}-{}", variant.name, vertex.name, fragment.name), "mode":mode, "file":file, "vertex":vertex.name, "fragment":fragment.name,"buffers":vertex_buffer_layouts(&module,vertex)}));
+                    let mut row = json!({
+                        "name": format!("{}-{}-{}", variant.name, vertex.name, fragment.name),
+                        "mode": mode,
+                        "file": file,
+                        "vertex": vertex.name,
+                        "fragment": fragment.name,
+                        "buffers": vertex_buffer_layouts(&module, vertex),
+                    });
+                    if let Some(groups) = layout_groups(&variant, &fragment.name, &definitions) {
+                        row["layoutGroups"] = groups;
+                    }
+                    manifest.push(row);
                 }
             }
         }

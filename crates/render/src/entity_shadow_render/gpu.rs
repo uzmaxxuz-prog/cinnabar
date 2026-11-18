@@ -1,5 +1,8 @@
-use super::*;
-use bevy::render::render_resource::{Sampler, SamplerBindingType, SamplerDescriptor};
+use super::{
+    *,
+    layout::{INSTANCE_BYTES, shadow_layout},
+};
+use bevy::render::render_resource::{Sampler, SamplerDescriptor};
 use render_scene::{AtmosphereFrame, EntityShadowScene};
 
 #[derive(Resource)]
@@ -29,65 +32,11 @@ impl EntityShadowGpu {
                 contents: bytemuck::cast_slice(&mesh),
                 usage: BufferUsages::VERTEX,
             });
-        let fragment = ShaderStages::FRAGMENT;
-        let entry = |binding, visibility, ty| BindGroupLayoutEntry {
-            binding,
-            visibility,
-            ty,
-            count: None,
-        };
         // The shader picks this layout from the global `WEBGPU_COMPATIBILITY` shader def, which
         // the pipeline cache derives from the device profile mode. Independent texture caps such
         // as VIEW_FORMATS must not decide a shader-interface layout.
         let compatibility = device.is_webgpu_compatibility();
-        let layouts = [false, true].map(|multisampled| {
-            let mut entries = vec![
-                entry(
-                    0,
-                    ShaderStages::VERTEX_FRAGMENT,
-                    BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: true,
-                        min_binding_size: Some(ViewUniform::min_size()),
-                    },
-                ),
-                entry(
-                    1,
-                    fragment,
-                    BindingType::Texture {
-                        sample_type: TextureSampleType::Depth,
-                        view_dimension: TextureViewDimension::D2,
-                        multisampled: multisampled && !compatibility,
-                    },
-                ),
-                entry(
-                    3,
-                    ShaderStages::VERTEX_FRAGMENT,
-                    BindingType::Buffer {
-                        ty: BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: NonZeroU64::new(INSTANCE_BYTES),
-                    },
-                ),
-                entry(
-                    4,
-                    ShaderStages::VERTEX_FRAGMENT,
-                    BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: NonZeroU64::new(size_of::<EntityShadowParams>() as u64),
-                    },
-                ),
-            ];
-            if compatibility {
-                entries.push(entry(
-                    2,
-                    fragment,
-                    BindingType::Sampler(SamplerBindingType::NonFiltering),
-                ));
-            }
-            BindGroupLayoutDescriptor::new("entity shadow bind group layout", &entries)
-        });
+        let layouts = [false, true].map(|multisampled| shadow_layout(multisampled, compatibility));
         Self {
             mesh,
             depth_sampler: compatibility
