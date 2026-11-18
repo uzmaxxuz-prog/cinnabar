@@ -452,3 +452,249 @@ fn export_linked_browser_fixtures() {
     )
     .expect("shader manifest");
 }
+
+/// Reads the manifest the public export seam wrote; a missing or empty artifact is not a pass.
+fn exported_manifest(output: &std::path::Path) -> serde_json::Value {
+    let path = output.join("shaders.json");
+    let bytes =
+        std::fs::read(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+    assert!(!bytes.is_empty(), "{} is empty", path.display());
+    let manifest: serde_json::Value = serde_json::from_slice(&bytes)
+        .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+    let variants = manifest["variants"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{}: variants", path.display()));
+    assert!(!variants.is_empty(), "{} declares no variants", path.display());
+    manifest
+}
+
+/// Reads one described production group by the bind group index the pass binds it at.
+fn described_group(manifest: &serde_json::Value, entry: &str, group: u64) -> serde_json::Value {
+    let exported = manifest["variants"]
+        .as_array()
+        .expect("exported variants")
+        .iter()
+        .find(|item| item["name"].as_str() == Some(entry))
+        .unwrap_or_else(|| panic!("{entry} is not exported"));
+    let groups = exported["layoutGroups"].as_array().unwrap_or_else(|| {
+        panic!("{entry}: missing layoutGroups; production group {group} is not described")
+    });
+    groups
+        .iter()
+        .find(|described| described["group"].as_u64() == Some(group))
+        .unwrap_or_else(|| panic!("{entry}: group {group} is not described"))
+        .clone()
+}
+
+/// Projects a described group into binding number, kind and stage usage, ascending by binding.
+fn described_bindings(group: &serde_json::Value, entry: &str) -> Vec<(u64, String, String)> {
+    group["bindings"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{entry}: described group has no bindings"))
+        .iter()
+        .map(|binding| {
+            let number = binding["binding"]
+                .as_u64()
+                .unwrap_or_else(|| panic!("{entry}: described binding without a number"));
+            let kind = binding["kind"]
+                .as_str()
+                .unwrap_or_else(|| panic!("{entry}: binding {number} without a kind"));
+            let mut visibility: Vec<&str> = binding["visibility"]
+                .as_array()
+                .unwrap_or_else(|| panic!("{entry}: binding {number} without a visibility"))
+                .iter()
+                .filter_map(|stage| stage.as_str())
+                .collect();
+            visibility.sort_unstable();
+            (number, kind.to_owned(), visibility.join("+"))
+        })
+        .collect()
+}
+
+/// Reads one described binding for the interface fields a pipeline link depends on.
+fn described_binding<'a>(
+    group: &'a serde_json::Value,
+    entry: &str,
+    binding: u64,
+) -> &'a serde_json::Value {
+    group["bindings"]
+        .as_array()
+        .expect("described bindings")
+        .iter()
+        .find(|described| described["binding"].as_u64() == Some(binding))
+        .unwrap_or_else(|| panic!("{entry}: binding {binding} is not described"))
+}
+
+/// Asserts a described group repeats the production actor dissolve descriptor.
+///
+/// `crates/render/src/actor_render/masks.rs:61` builds binding 0 as a two-dimensional depth
+/// texture whose sample count follows the mask variant, and binding 1 as the compatibility
+/// sampler that makes a depth texture samplable without filtering.
+fn assert_dissolve_group(
+    entry: &str,
+    group: &serde_json::Value,
+    multisampled: bool,
+    compatibility: bool,
+) {
+    let mut expected = vec![(0_u64, "depthTexture".to_owned(), "fragment".to_owned())];
+    if compatibility {
+        expected.push((1, "sampler".to_owned(), "fragment".to_owned()));
+    }
+    assert_eq!(
+        described_bindings(group, entry),
+        expected,
+        "{entry}: described dissolve group differs from the production descriptor"
+    );
+    let depth = described_binding(group, entry, 0);
+    assert_eq!(
+        depth["viewDimension"].as_str(),
+        Some("d2"),
+        "{entry}: dissolve depth must stay two-dimensional"
+    );
+    assert_eq!(
+        depth["multisampled"].as_bool(),
+        Some(multisampled && !compatibility),
+        "{entry}: dissolve depth samples disagree with the mask variant and device profile"
+    );
+    if compatibility {
+        let sampler = described_binding(group, entry, 1);
+        assert_eq!(
+            sampler["sampler"].as_str(),
+            Some("nonFiltering"),
+            "{entry}: compatibility must keep the nearest dissolve sampler"
+        );
+    }
+}
+
+/// Asserts a described group repeats the production entity-shadow descriptor.
+///
+/// `crates/render/src/entity_shadow_render/gpu.rs:44` builds the dynamic view uniform at binding 0,
+/// the scene depth at binding 1, the compatibility sampler at binding 2, and the caster and
+/// parameter buffers at bindings 3 and 4.
+fn assert_shadow_group(
+    entry: &str,
+    group: &serde_json::Value,
+    multisampled: bool,
+    compatibility: bool,
+) {
+    let mut expected: Vec<(u64, String, String)> = vec![
+        (0, "uniformBuffer".to_owned(), "fragment+vertex".to_owned()),
+        (1, "depthTexture".to_owned(), "fragment".to_owned()),
+        (3, "storageBuffer".to_owned(), "fragment+vertex".to_owned()),
+        (4, "uniformBuffer".to_owned(), "fragment+vertex".to_owned()),
+    ];
+    if compatibility {
+        expected.insert(2, (2, "sampler".to_owned(), "fragment".to_owned()));
+    }
+    assert_eq!(
+        described_bindings(group, entry),
+        expected,
+        "{entry}: described shadow group differs from the production descriptor"
+    );
+    let depth = described_binding(group, entry, 1);
+    assert_eq!(
+        depth["viewDimension"].as_str(),
+        Some("d2"),
+        "{entry}: shadow depth must stay two-dimensional"
+    );
+    assert_eq!(
+        depth["multisampled"].as_bool(),
+        Some(multisampled && !compatibility),
+        "{entry}: shadow depth samples disagree with the shadow variant and device profile"
+    );
+    if compatibility {
+        let sampler = described_binding(group, entry, 2);
+        assert_eq!(
+            sampler["sampler"].as_str(),
+            Some("nonFiltering"),
+            "{entry}: compatibility must keep the nearest shadow sampler"
+        );
+    }
+}
+
+/// The exported manifest must describe the private groups the dissolve and shadow passes bind.
+///
+/// The mask colour pass binds its own companion depth at group 3 and the entity-shadow pass binds
+/// scene depth at group 0, so each exported variant of either pass must carry the group index, the
+/// production label and the real descriptor entries, with the sample count and the compatibility
+/// sampler agreeing with the exported profile.
+#[test]
+fn exported_manifest_describes_production_dissolve_and_shadow_bind_groups() {
+    let Some(output) = std::env::var_os("CINNABAR_SHADER_FIXTURE_OUT") else {
+        eprintln!("missing-fixture: CINNABAR_SHADER_FIXTURE_OUT; layout description not checked");
+        return;
+    };
+    let output = std::path::PathBuf::from(output);
+    let manifest = exported_manifest(&output);
+    let exported: Vec<(String, String, String)> = manifest["variants"]
+        .as_array()
+        .expect("exported variants")
+        .iter()
+        .filter_map(|item| {
+            Some((
+                item["name"].as_str()?.to_owned(),
+                item["mode"].as_str()?.to_owned(),
+                item["fragment"].as_str().unwrap_or_default().to_owned(),
+            ))
+        })
+        .collect();
+    let mut dissolve_variants = 0;
+    let mut shadow_variants = 0;
+    for variant in variants() {
+        let dissolve = variant.name.starts_with("actor-mask-dissolve");
+        let shadow = variant.name.starts_with("entity-shadow-");
+        let fragment = match (dissolve, shadow) {
+            (true, _) => "actor_mask_fragment",
+            (_, true) => "shadow_fragment",
+            _ => continue,
+        };
+        if dissolve {
+            dissolve_variants += 1;
+        }
+        if shadow {
+            shadow_variants += 1;
+        }
+        let multisampled = if dissolve {
+            variant.definitions.contains(&"MASK_DISSOLVE_MSAA")
+        } else {
+            variant.definitions.contains(&"MULTISAMPLED")
+        };
+        let prefix = format!("{}-", variant.name);
+        for (mode, compatibility) in [("core", false), ("compatibility", true)] {
+            let entries: Vec<&str> = exported
+                .iter()
+                .filter(|(name, profile, exported_fragment)| {
+                    profile == mode && exported_fragment == fragment && name.starts_with(&prefix)
+                })
+                .map(|(name, _, _)| name.as_str())
+                .collect();
+            assert_eq!(
+                entries.len(),
+                1,
+                "{}: expected one exported {mode} {fragment} entry, found {entries:?}",
+                variant.name
+            );
+            let entry = entries[0];
+            let group = described_group(&manifest, entry, if dissolve { 3 } else { 0 });
+            let label = if dissolve {
+                "mask dissolve depth"
+            } else {
+                "entity shadow bind group layout"
+            };
+            assert_eq!(
+                group["label"].as_str(),
+                Some(label),
+                "{entry}: described group label differs from the production descriptor"
+            );
+            if dissolve {
+                assert_dissolve_group(entry, &group, multisampled, compatibility);
+            } else {
+                assert_shadow_group(entry, &group, multisampled, compatibility);
+            }
+        }
+    }
+    assert!(
+        dissolve_variants > 0 && shadow_variants > 0,
+        "the exported inventory lost a bind-group-describing variant family"
+    );
+}
