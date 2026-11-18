@@ -204,7 +204,8 @@ fn linked(variant: &Variant, compatibility: bool) -> (String, naga::Module) {
     if compatibility {
         definitions.push("WEBGPU_COMPATIBILITY");
     }
-    let source = shader_source::standalone_prepared(&variant.source, &definitions);
+    let source = shader_source::link_prepared(&variant.source, &definitions)
+        .unwrap_or_else(|error| panic!("{}: {error}", variant.name));
     let module = naga::front::wgsl::parse_str(&source)
         .unwrap_or_else(|error| panic!("{}: {}", variant.name, error.emit_to_string(&source)));
     naga::valid::Validator::new(

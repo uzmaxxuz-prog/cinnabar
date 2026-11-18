@@ -174,13 +174,19 @@ fn compile(source: &str, definitions: &[&str], prune: bool) -> String {
     compile_prepared(&source, definitions, prune)
 }
 
+/// Links a prepared root with Bevy's mangling and pruning, leaving WGSL validation to the caller.
+pub fn link_prepared(source: &str, definitions: &[&str]) -> Result<String, String> {
+    compile_prepared_with(source, definitions, true, Vec::new())
+}
+
 /// Composes a prepared root with pruning, resolving `modules` beside the production modules.
 pub fn composed_prepared_with(
     source: &str,
     definitions: &[&str],
     modules: Vec<(&'static str, String)>,
 ) -> String {
-    let source = compile_prepared_with(source, definitions, true, modules);
+    let source = compile_prepared_with(source, definitions, true, modules)
+        .unwrap_or_else(|error| panic!("{error}"));
     let module = naga::front::wgsl::parse_str(&source).expect("composed WGSL parses");
     naga::valid::Validator::new(
         naga::valid::ValidationFlags::all(),
@@ -194,6 +200,7 @@ pub fn composed_prepared_with(
 /// Resolves imports while preserving the already prepared root module verbatim.
 fn compile_prepared(source: &str, definitions: &[&str], prune: bool) -> String {
     compile_prepared_with(source, definitions, prune, Vec::new())
+        .unwrap_or_else(|error| panic!("{error}"))
 }
 
 fn compile_prepared_with(
@@ -201,7 +208,7 @@ fn compile_prepared_with(
     definitions: &[&str],
     prune: bool,
     modules: Vec<(&'static str, String)>,
-) -> String {
+) -> Result<String, String> {
     let mut resolver = wesl::resolver::VirtualResolver::new();
     for (path, source) in [
         ("bevy_render::view", VIEW.to_owned()),
@@ -295,8 +302,8 @@ fn compile_prepared_with(
         ..Default::default()
     };
     wesl::compile(&root, &options, &FixtureResolver(resolver))
-        .unwrap_or_else(|error| panic!("{}", error.diagnostic().render_plain()))
-        .to_string()
+        .map(|module| module.to_string())
+        .map_err(|error| error.diagnostic().render_plain())
 }
 
 /// Resolves dependency packages with the same crate names used by Bevy's shader cache.
