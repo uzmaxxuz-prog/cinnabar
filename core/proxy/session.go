@@ -157,6 +157,7 @@ func (server *sessionServer) serveConnWithPacks(ctx context.Context, raw net.Con
 	sessionCtx, cancel := context.WithCancelCause(joinprofile.Start(ctx, request.JoinProfileID))
 	defer cancel(nil)
 	session := newSessionConn(framed)
+	session.transfers = server.transfers
 	defer func() { _ = session.Close() }()
 
 	plan, prepared, err := server.prepare(sessionCtx, cancel, session, downstream, request.Target)

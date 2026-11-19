@@ -27,8 +27,9 @@ type sessionConn struct {
 	closeErr   error
 	clientPool packet.Pool
 	serverPool packet.Pool
-	shieldID   atomic.Int32  // from the ItemRegistry relayed to the client, for decoding its item stacks
-	runtimeID  atomic.Uint64 // the player's runtime ID from the upstream StartGame
+	transfers  *TransferState // decides which upstream Transfers may move the session
+	shieldID   atomic.Int32   // from the ItemRegistry relayed to the client, for decoding its item stacks
+	runtimeID  atomic.Uint64  // the player's runtime ID from the upstream StartGame
 
 	terminalDelivered atomic.Bool // a complete terminal frame reached the local transport
 
@@ -132,7 +133,8 @@ func (session *sessionConn) ReadBatchRaw(decode func(uint32) bool) ([]minecraft.
 }
 
 // WritePacketRaw adds an upstream packet to the forming batch. A usable Transfer instead flushes
-// the batch, ends the session with a Transfer message and returns errSessionEnded.
+// the batch, ends the session with a Transfer message and returns errSessionEnded; one the transfer
+// policy refuses ends it with a disconnect instead.
 func (session *sessionConn) WritePacketRaw(data []byte) error {
 	session.writeMu.Lock()
 	defer session.writeMu.Unlock()
@@ -145,7 +147,10 @@ func (session *sessionConn) WritePacketRaw(data []byte) error {
 			session.observeItemRegistry(data)
 		case packet.IDTransfer:
 			if transfer, ok := decodeSessionPacket(session.serverPool, data, 0, false).(*packet.Transfer); ok {
-				if _, err := transferAddress(transfer.Address, transfer.Port); err == nil {
+				if address, err := transferAddress(transfer.Address, transfer.Port); err == nil {
+					if session.transfers.admits(address) != nil {
+						return session.endLocked(bridgecontract.SessionKindDisconnect, sessionDisconnect{Message: bridgecontract.DisconnectKeyCantConnect})
+					}
 					return session.endLocked(bridgecontract.SessionKindTransfer, sessionTransfer{
 						Address: transfer.Address, Port: transfer.Port, ReloadWorld: transfer.ReloadWorld,
 					})

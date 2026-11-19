@@ -151,3 +151,32 @@ func TestSessionHandlerDownloadsPacksThroughItsDialer(t *testing.T) {
 		t.Fatal("a redirect reached a host the dialer refuses")
 	}
 }
+
+// A pack download keeps no cookies: a cookie the pack host sets is not sent back on the redirect
+// it answers with, although that redirect stays on the same host, where a cookie jar would send it.
+func TestSessionHandlerPackRedirectCarriesNoCookie(t *testing.T) {
+	redirected := make(chan http.Header, 1)
+	host := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/moved.zip" {
+			redirected <- r.Header.Clone()
+			return
+		}
+		http.SetCookie(w, &http.Cookie{Name: "access", Value: "secret", Path: "/"})
+		http.Redirect(w, r, "/moved.zip", http.StatusFound)
+	}))
+	defer host.Close()
+	handler, err := NewSessionHandler(SessionHandlerConfig{Dialer: new(net.Dialer), Logger: slog.New(slog.DiscardHandler)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer handler.Close()
+	_, _ = resource.ReadURLWithProgress(t.Context(), handler.server.prepared.httpClient, host.URL+"/pack.zip", 1<<20, nil)
+	select {
+	case header := <-redirected:
+		if cookie := header.Get("Cookie"); cookie != "" {
+			t.Fatalf("the redirected pack request sent the host's cookie back: %q", cookie)
+		}
+	default:
+		t.Fatal("the pack download did not follow the redirect")
+	}
+}
