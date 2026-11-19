@@ -70,7 +70,7 @@ pub(super) fn export(output: &std::path::Path) -> Vec<serde_json::Value> {
                 "@builtin(instance_index) instance_index: u32",
                 "instance_index: u32",
             );
-        let linked = shader_source::standalone_prepared(&source, definitions);
+        let linked = shader_source::standalone_prepared_export(&source, definitions);
         let source = format!(
             "{linked}\nstruct ShadeWitness {{ @builtin(position) position: vec4<f32>, @location(0) @interpolate({interpolation}) shade: f32, }}\n@vertex fn shade_vertex(@builtin(vertex_index) index: u32) -> ShadeWitness {{ let actual = hand_vertex(index, 0u); return ShadeWitness(actual.position, {shade}); }}\n@fragment fn shade_fragment(input: ShadeWitness) -> @location(0) vec4<f32> {{ return vec4(vec3(input.shade), 1.0); }}"
         );

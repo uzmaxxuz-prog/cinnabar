@@ -39,7 +39,7 @@ fn export_actor_browser_fixture() {
         ("core", &[][..]),
         ("compatibility", &["WEBGPU_COMPATIBILITY"][..]),
     ] {
-        let wgsl = shader_source::standalone_prepared(&source, definitions);
+        let wgsl = shader_source::standalone_prepared_export(&source, definitions);
         let module = naga::front::wgsl::parse_str(&wgsl).expect("production actor WGSL parses");
         naga::valid::Validator::new(
             naga::valid::ValidationFlags::all(),

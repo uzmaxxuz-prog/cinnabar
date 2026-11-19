@@ -227,6 +227,30 @@ fn linked(variant: &Variant, compatibility: bool) -> (String, naga::Module, Vec<
     (source, module, definitions)
 }
 
+/// EXPERIMENTAL export-only twin of `linked`: canonical module order for stable fixture bytes.
+///
+/// Feeds `export_linked_browser_fixtures` only; the native layout test keeps `linked`.
+fn linked_for_export(
+    variant: &Variant,
+    compatibility: bool,
+) -> (String, naga::Module, Vec<&'static str>) {
+    let mut definitions = variant.definitions.clone();
+    if compatibility {
+        definitions.push("WEBGPU_COMPATIBILITY");
+    }
+    let source = shader_source::link_prepared_export(&variant.source, &definitions)
+        .unwrap_or_else(|error| panic!("{}: {error}", variant.name));
+    let module = naga::front::wgsl::parse_str(&source)
+        .unwrap_or_else(|error| panic!("{}: {}", variant.name, error.emit_to_string(&source)));
+    naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::all(),
+    )
+    .validate(&module)
+    .unwrap_or_else(|error| panic!("{}: {error:?}", variant.name));
+    (source, module, definitions)
+}
+
 /// Flattens the declared entry interface, retaining builtin and interpolation metadata.
 fn bindings<'a>(
     module: &'a naga::Module,
@@ -515,7 +539,7 @@ fn export_linked_browser_fixtures() {
     manifest.extend(actor_pixels::export(&output));
     for variant in variants() {
         for (mode, compatibility) in [("core", false), ("compatibility", true)] {
-            let (source, module, definitions) = linked(&variant, compatibility);
+            let (source, module, definitions) = linked_for_export(&variant, compatibility);
             let file = format!("{}-{mode}.wgsl", variant.name);
             std::fs::write(output.join(&file), source).expect("write linked shader");
             let vertices: Vec<_> = module

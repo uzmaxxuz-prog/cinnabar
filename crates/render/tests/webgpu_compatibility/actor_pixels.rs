@@ -44,7 +44,7 @@ pub(super) fn export(output: &std::path::Path) -> Vec<serde_json::Value> {
         let file = format!("actor-pixels-{mode}.wgsl");
         std::fs::write(
             output.join(&file),
-            shader_source::standalone_prepared(&source, definitions),
+            shader_source::standalone_prepared_export(&source, definitions),
         )
         .expect("actor material fixture WGSL");
         for (id, overlay_rgba8, expected) in [

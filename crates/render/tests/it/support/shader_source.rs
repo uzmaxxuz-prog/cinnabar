@@ -306,6 +306,173 @@ fn compile_prepared_with(
         .map_err(|error| error.diagnostic().render_plain())
 }
 
+/// EXPERIMENTAL export-only link with a canonical module order; not a claimed fix.
+///
+/// Twin of `link_prepared`: identical fixture registry, options, mangling and pruning,
+/// but the linked unit is rebuilt from the compiler's already-retargeted and mangled
+/// modules in a canonical order (root first, then module identity) instead of the
+/// HashMap-derived discovery order, so independent exporter runs agree byte for byte.
+/// Native callers keep using `link_prepared`.
+pub fn link_prepared_export(source: &str, definitions: &[&str]) -> Result<String, String> {
+    compile_prepared_ordered(source, definitions, true)
+}
+
+/// EXPERIMENTAL export-only standalone compile with a canonical module order.
+///
+/// Twin of `standalone_prepared` for the opt-in browser fixture exporters; native
+/// callers keep using `standalone_prepared`.
+pub fn standalone_prepared_export(source: &str, definitions: &[&str]) -> String {
+    compile_prepared_ordered(source, definitions, false)
+        .unwrap_or_else(|error| panic!("{error}"))
+}
+
+/// Re-links the prepared root with canonical module ordering, preserving the exact
+/// declarations, mangled names and strip filter of the original pipeline.
+///
+/// Mirrors `compile_prepared_with`'s registry and options verbatim so the native seam
+/// stays byte-identical. `wesl::compile` already ran retargeting, mangling, linking
+/// and validation, and `CompileResult::modules` holds the final per-module trees, so
+/// re-running `wesl::pass::link` with the original `used_items` filter reproduces the
+/// linked unit with only the module order changed. Fails closed when any global
+/// directive survives linking, because reordering modules would move its scope.
+fn compile_prepared_ordered(
+    source: &str,
+    definitions: &[&str],
+    prune: bool,
+) -> Result<String, String> {
+    let mut resolver = wesl::resolver::VirtualResolver::new();
+    for (path, source) in [
+        ("bevy_render::view", VIEW.to_owned()),
+        (
+            "render::terrain_tables",
+            include_str!("../../../src/terrain_tables.wesl").to_owned(),
+        ),
+        (
+            "render::chunk_records",
+            material_shader::source(include_str!("../../../src/chunk_records.wesl")),
+        ),
+        (
+            "bevy_render::globals",
+            "struct Globals { time: f32, delta_time: f32, frame_count: u32 }".to_owned(),
+        ),
+        (
+            "bevy_core_pipeline::fullscreen_vertex_shader",
+            FULLSCREEN.to_owned(),
+        ),
+        (
+            "render::material",
+            material_shader::source(include_str!("../../../src/material.wesl")),
+        ),
+        (
+            "render::lighting",
+            material_shader::source(include_str!("../../../src/lighting.wesl")),
+        ),
+        (
+            "render::glint",
+            material_shader::source(include_str!("../../../src/glint.wesl")),
+        ),
+        (
+            "render::actor_rig",
+            include_str!("../../../src/actor_rig.wesl").to_owned(),
+        ),
+        (
+            "render::biome_tint",
+            material_shader::bind_biome_tables(&meshing::biome_lattice::shader_source(
+                include_str!("../../../src/biome_tint.wesl"),
+            )),
+        ),
+        (
+            "render::world_projection",
+            include_str!("../../../src/world_projection.wesl").to_owned(),
+        ),
+        (
+            "render::chunk_bindings",
+            material_shader::source(include_str!("../../../src/chunk_bindings.wesl")),
+        ),
+        (
+            "render::enhanced::common",
+            include_str!("../../../src/enhanced/common.wesl").to_owned(),
+        ),
+        (
+            "render::enhanced::view",
+            include_str!("../../../src/enhanced/view.wesl").to_owned(),
+        ),
+        (
+            "render::enhanced::caster",
+            include_str!("../../../src/enhanced/caster.wesl").to_owned(),
+        ),
+        (
+            "render::liquid",
+            material_shader::source(include_str!("../../../src/liquid.wesl")),
+        ),
+        (
+            "render::model",
+            material_shader::source(include_str!("../../../src/model.wesl")),
+        ),
+        (
+            "render::chunk",
+            material_shader::source(include_str!("../../../src/chunk.wesl")),
+        ),
+    ]
+    .into_iter()
+    {
+        resolver.add_module(path.parse().expect("module path"), source.into());
+    }
+    let root: wesl::syntax::ModulePath = "fixture::shader".parse().expect("root module path");
+    resolver.add_module(root.clone(), source.to_owned().into());
+    let options = wesl::CompileOptions {
+        visibility: false,
+        features: features(definitions),
+        strip: prune,
+        mangler: if prune {
+            wesl::ManglerKind::Escape
+        } else {
+            wesl::ManglerKind::None
+        },
+        ..Default::default()
+    };
+    let wesl::CompileResult {
+        syntax,
+        mut modules,
+        used_items,
+        ..
+    } = wesl::compile(&root, &options, &FixtureResolver(resolver))
+        .map_err(|error| error.diagnostic().render_plain())?;
+    if !syntax.global_directives.is_empty() {
+        return Err(
+            "export ordering refuses global directives: reordering moves their scope".to_owned(),
+        );
+    }
+    modules.sort_by(|left, right| {
+        let left_root = left.path == root;
+        let right_root = right.path == root;
+        right_root
+            .cmp(&left_root)
+            .then_with(|| export_module_rank(&left.path).cmp(&export_module_rank(&right.path)))
+    });
+    let mut unit = wesl::pass::link(&modules, options.strip.then_some(&used_items));
+    if options.lower {
+        wesl::pass::lower(&mut unit).map_err(|error| error.diagnostic().render_plain())?;
+    }
+    if options.validate {
+        wesl::pass::validate_wgsl(&unit).map_err(|diagnostic| diagnostic.render_plain())?;
+    }
+    Ok(unit.to_string())
+}
+
+/// Orders module identities: origin kind, package name, then path components.
+fn export_module_rank(path: &wesl::syntax::ModulePath) -> (u8, Option<&str>, usize, &[String]) {
+    match &path.origin {
+        wesl::syntax::PathOrigin::Absolute => (0, None, 0, path.components.as_slice()),
+        wesl::syntax::PathOrigin::Relative(levels) => {
+            (1, None, *levels, path.components.as_slice())
+        }
+        wesl::syntax::PathOrigin::Package(package) => {
+            (2, Some(package.as_str()), 0, path.components.as_slice())
+        }
+    }
+}
+
 /// Resolves dependency packages with the same crate names used by Bevy's shader cache.
 struct FixtureResolver(wesl::resolver::VirtualResolver<'static>);
 
