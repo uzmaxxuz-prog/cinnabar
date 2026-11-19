@@ -26,6 +26,7 @@ fn now() -> Duration {
 /// Supplies browser services to the one shared page driver.
 struct BrowserHost {
     origin: String,
+    release: Option<String>,
     observe: Function,
     account: Rc<RefCell<crate::launcher::RelayAccount>>,
 }
@@ -41,6 +42,12 @@ impl Host for BrowserHost {
         timer::sleep(duration)
     }
     fn transports(&self) -> Result<(Option<BrowserTransport>, BrowserTransport), CloseReason> {
+        if let Some(release) = self.release.as_deref() {
+            return Ok((
+                None,
+                BrowserTransport::new_with_release(&self.origin, false, Some(release))?,
+            ));
+        }
         Ok((
             BrowserTransport::new(&self.origin, true).ok(),
             BrowserTransport::new(&self.origin, false)?,
@@ -70,9 +77,10 @@ pub struct Page {
 
 #[wasm_bindgen]
 impl Page {
-    /// Opens QUIC first and falls back through the existing transport selector.
+    /// Opens QUIC first and falls back through the existing transport selector, or uses
+    /// WebSocket-only with a non-secret `release` query parameter when `release` is provided.
     #[wasm_bindgen(constructor)]
-    pub fn new(origin: &str, observe: Function) -> Result<Page, JsError> {
+    pub fn new(origin: &str, observe: Function, release: Option<String>) -> Result<Page, JsError> {
         let intent = Rc::new(Intent::default());
         let ready = Rc::clone(&intent.ready);
         let account = Rc::new(RefCell::new(crate::launcher::RelayAccount::default()));
@@ -81,9 +89,11 @@ impl Page {
         let (lifecycle, changed) = mpsc::channel(1);
         let suspended = Rc::new(Cell::new(false));
         let (cancel, cancelled) = oneshot::channel();
+        let release = release.filter(|value| !value.is_empty());
         spawn_local(relay::run(
             BrowserHost {
                 origin: origin.to_owned(),
+                release,
                 observe: observe.clone(),
                 account: Rc::clone(&account),
             },
@@ -257,6 +267,7 @@ impl Carriers {
         input: &crate::BrowserInput,
         identity: i64,
         audio: Option<SoundSource>,
+        on_renderer: Option<Function>,
     ) -> Result<Game, JsError> {
         console_error_panic_hook::set_once();
         let startup = self.into_startup().map_err(error)?;
@@ -276,13 +287,25 @@ impl Carriers {
             client_audio::named_audio::AudioDevice::disabled()
         };
         let audio = output.browser_audio();
-        let host = cinnabar::browser::run(
+        let observer = on_renderer.map(|callback| {
+            cinnabar::browser::RendererStatusObserver(Box::new(move |state, detail| {
+                emit(
+                    &callback,
+                    serde_json::json!({
+                        "state": state,
+                        "detail": detail,
+                    }),
+                );
+            }))
+        });
+        let host = cinnabar::browser::run_with_observer(
             startup,
             canvas,
             identity,
             Box::new(move || input.take_device()),
             bank,
             output,
+            observer,
         )
         .map_err(|error| JsError::new(&error.to_string()))?;
         Ok(Game::new(host, audio, audio_task))

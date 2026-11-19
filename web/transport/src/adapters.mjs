@@ -70,6 +70,7 @@ export async function open(t, name, join) {
         return wait(ch, creating);
     }
     const url = new URL(control ? t.c.controlPath : t.c.playPath, t.origin);
+    if (typeof t.c.release === "string" && t.c.release.length > 0) url.searchParams.set("release", t.c.release);
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
     const ws = ch.socket = new WebSocket(url, t.c.protocol);
     ws.binaryType = "arraybuffer";

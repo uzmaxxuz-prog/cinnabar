@@ -41,11 +41,11 @@ export async function boundedBytes(response, maximum, exact = true) {
 }
 
 /** Keeps required delivery failures fatal while unavailable optional carriers use startup fallbacks. */
-export async function downloadCarriers(carriers, manifest, base, fetcher = fetch) {
+export async function downloadCarriers(carriers, manifest, base, fetcher = fetch, credentials = "omit") {
   for (const [name, path, required] of JSON.parse(carriers.entries())) {
     try {
       const entry = manifest.entries.find((entry) => entry.name === name);
-      const response = await fetcher(new URL(path, base), { credentials: "omit" });
+      const response = await fetcher(new URL(path, base), { credentials, redirect: "error" });
       carriers.insert(name, await boundedBytes(response, entry.bytes));
     } catch (error) {
       if (required !== false) throw error;

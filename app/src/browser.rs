@@ -19,6 +19,9 @@ mod session;
 mod startup;
 pub use session::{Event, Host};
 
+/// Reports actual browser renderer startup readiness or limit failures after async GPU init.
+pub struct RendererStatusObserver(pub Box<dyn FnMut(&str, Option<&str>)>);
+
 /// Starts the renderer on an existing canvas, retaining the verified world inputs.
 pub fn run(
     startup: StartupCarriers,
@@ -27,6 +30,19 @@ pub fn run(
     input: Box<dyn FnMut() -> semantic_input::DeviceFrame>,
     audio: Option<client_audio::audio::SoundBank>,
     output: client_audio::named_audio::AudioDevice,
+) -> anyhow::Result<Host> {
+    run_with_observer(startup, canvas, identity, input, audio, output, None)
+}
+
+/// Starts the renderer and notifies `observer` once the GPU device initializes or fails validation.
+pub fn run_with_observer(
+    startup: StartupCarriers,
+    canvas: String,
+    identity: protocol::ClientRandomId,
+    input: Box<dyn FnMut() -> semantic_input::DeviceFrame>,
+    audio: Option<client_audio::audio::SoundBank>,
+    output: client_audio::named_audio::AudioDevice,
+    observer: Option<RendererStatusObserver>,
 ) -> anyhow::Result<Host> {
     anyhow::ensure!(
         !STARTED.with(std::cell::Cell::get),
@@ -37,6 +53,9 @@ pub fn run(
     let mut app = App::new();
     let (host, commands) = startup::install(&mut app, startup, identity, audio, output)?;
     STARTED.with(|started| started.set(true));
+    if let Some(observer) = observer {
+        app.insert_non_send(observer);
+    }
     app.add_plugins(
         DefaultPlugins
             .set(WindowPlugin {

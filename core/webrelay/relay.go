@@ -46,6 +46,14 @@ type Config struct {
 	// session. HTTP requests, such as pack downloads, still reach public hosts only. The zero value
 	// admits public game servers only.
 	GameEndpoint netip.AddrPort
+	// MaxConnectionsPerIP caps simultaneous transport connections per client IP. Zero uses maxPerIP (4).
+	MaxConnectionsPerIP int
+	// MaxSessionsPerIP caps retained web sessions per client IP. Zero uses maxPerIP (4).
+	MaxSessionsPerIP int
+	// ActionRatePerMinute sets the per-IP action refill rate per minute. Zero uses 12.
+	ActionRatePerMinute float64
+	// ActionBurst sets the per-IP action token burst. Zero uses 6.
+	ActionBurst int
 }
 
 // Relay owns bounded in-memory accounts and transport connections. Close erases the accounts.
@@ -83,11 +91,39 @@ func New(cfg Config) *Relay {
 		connections: make(map[netip.Addr]int), limiters: make(map[netip.Addr]*clientLimiter)}
 }
 
+func (relay *Relay) maxConnectionsPerIP() int {
+	if relay.cfg.MaxConnectionsPerIP > 0 {
+		return relay.cfg.MaxConnectionsPerIP
+	}
+	return maxPerIP
+}
+
+func (relay *Relay) maxSessionsPerIP() int {
+	if relay.cfg.MaxSessionsPerIP > 0 {
+		return relay.cfg.MaxSessionsPerIP
+	}
+	return maxPerIP
+}
+
+func (relay *Relay) actionRate() rate.Limit {
+	if relay.cfg.ActionRatePerMinute > 0 {
+		return rate.Limit(relay.cfg.ActionRatePerMinute / 60.0)
+	}
+	return rate.Limit(12.0 / 60.0)
+}
+
+func (relay *Relay) actionBurst() int {
+	if relay.cfg.ActionBurst > 0 {
+		return relay.cfg.ActionBurst
+	}
+	return 6
+}
+
 // admit bounds every transport, including connections that have not sent Hello yet.
 func (relay *Relay) admit(client netip.Addr, now time.Time) (func(), error) {
 	relay.mu.Lock()
 	defer relay.mu.Unlock()
-	if !client.IsValid() || relay.ctx.Err() != nil || relay.active >= maxSessions || relay.connections[client] >= maxPerIP || !relay.allowLocked(client, now) {
+	if !client.IsValid() || relay.ctx.Err() != nil || relay.active >= maxSessions || relay.connections[client] >= relay.maxConnectionsPerIP() || !relay.allowLocked(client, now) {
 		return nil, errAdmission
 	}
 	relay.active++
@@ -112,7 +148,7 @@ func (relay *Relay) allowLocked(client netip.Addr, now time.Time) bool {
 		if len(relay.limiters) >= 4*maxSessions {
 			return false
 		}
-		entry = &clientLimiter{limiter: rate.NewLimiter(rate.Limit(12.0/60), 6)}
+		entry = &clientLimiter{limiter: rate.NewLimiter(relay.actionRate(), relay.actionBurst())}
 		relay.limiters[client] = entry
 	}
 	entry.lastSeen = now
@@ -146,7 +182,7 @@ func (relay *Relay) openControl(scope Scope, client netip.Addr, token string, no
 	} else if _, exists := relay.sessions[session]; !exists || token != "" && relay.resumeLocked(token, now) != session {
 		// The bearer or session may have expired while this controller waited.
 		err = errResume
-	} else if session.client != client && relay.perIP[client] >= maxPerIP {
+	} else if session.client != client && relay.perIP[client] >= relay.maxSessionsPerIP() {
 		err = errAdmission
 	}
 	if err != nil {
@@ -208,7 +244,7 @@ func (relay *Relay) controlSession(scope Scope, client netip.Addr, token string,
 	if previous := relay.scopes[scope.ID]; scope.ID != "" && previous != nil {
 		relay.forgetLocked(previous)
 	}
-	if len(relay.sessions) >= maxSessions || relay.perIP[client] >= maxPerIP {
+	if len(relay.sessions) >= maxSessions || relay.perIP[client] >= relay.maxSessionsPerIP() {
 		return nil, errAdmission
 	}
 	session, err := newWebSession(relay, scope, client, now, userAgent, appleMobile)

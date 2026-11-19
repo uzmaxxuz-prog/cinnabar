@@ -74,3 +74,12 @@ test("invalid range extents do not issue requests", async () => {
   }
   assert.equal(requests.length, 0);
 });
+
+test("same-origin sound bank preserves credentials across initial and later range reads", async () => {
+  const { fetcher, requests } = fixture();
+  const bank = await openSoundBank("https://assets.invalid/bank", 8, () => 16, fetcher, "same-origin");
+  const request = startRange(bank.source, 40, 4, fetcher);
+  assert.deepEqual(await rangePromise(request), Uint8Array.from([40, 41, 42, 43]));
+  assert.deepEqual(requests.map(req => req.credentials), ["same-origin", "same-origin", "same-origin"]);
+  assert.deepEqual(requests.map(req => req.redirect), ["error", "error", "error"]);
+});

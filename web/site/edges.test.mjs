@@ -154,3 +154,26 @@ test("owned retry timers register once and settle on cancellation or expiry", as
     globalThis.clearTimeout = previousClear;
   }
 });
+
+test("downloadCarriers forwards same-origin credentials and refuses redirects", async () => {
+  const seen = [];
+  const carriers = {
+    entries: () => JSON.stringify([["req", "req.bin", true]]),
+    insert() {},
+  };
+  await downloadCarriers(
+    carriers,
+    { entries: [{ name: "req", bytes: 2 }] },
+    new URL("https://play.invalid/releases/abc/assets/"),
+    async (url, options) => {
+      seen.push({ url: url.href, credentials: options.credentials, redirect: options.redirect });
+      return new Response(Uint8Array.from([1, 2]));
+    },
+    "same-origin",
+  );
+  assert.deepEqual(seen, [{
+    url: "https://play.invalid/releases/abc/assets/req.bin",
+    credentials: "same-origin",
+    redirect: "error",
+  }]);
+});

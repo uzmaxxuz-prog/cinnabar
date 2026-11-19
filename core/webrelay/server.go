@@ -123,6 +123,7 @@ func (relay *Relay) serveSocket(w http.ResponseWriter, r *http.Request, channel 
 	client := clientAddr(r)
 	release, err := relay.admitSocket(r)
 	if err != nil {
+		w.Header().Set("Retry-After", "5")
 		http.Error(w, refusal(err), http.StatusTooManyRequests)
 		return
 	}

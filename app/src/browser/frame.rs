@@ -39,6 +39,7 @@ pub(super) fn configure(app: &mut App) {
         (
             network::initialize_overlay_texture_limit,
             network::initialize_actor_geometry_budget,
+            report_renderer_startup,
         ),
     )
     .add_systems(Update, sample_input.in_set(ClientFrameSet::RawInput))
@@ -141,4 +142,40 @@ pub(super) fn configure(app: &mut App) {
             .after(world::reconcile_world_stream_before_physics)
             .after(world::drive_world_stream),
     );
+}
+
+/// Verifies that the initialized browser GPU device can host every startup terrain texture page.
+fn report_renderer_startup(
+    device: Option<Res<bevy::render::renderer::RenderDevice>>,
+    adapter_info: Option<Res<bevy::render::renderer::RenderAdapterInfo>>,
+    chunk_assets: Res<render_scene::ChunkTextureAssets>,
+    observer: Option<NonSendMut<super::RendererStatusObserver>>,
+) {
+    let Some(mut observer) = observer else {
+        return;
+    };
+    let Some(device) = device else {
+        (observer.0)("failed", Some("WebGPU renderer device did not initialize"));
+        return;
+    };
+    let limits = device.limits();
+    let texture_limits = render_scene::TextureArrayLimits {
+        max_layers: limits.max_texture_array_layers,
+        max_dimension_2d: limits.max_texture_dimension_2d,
+    };
+    for page in chunk_assets.assets().texture_pages() {
+        let tile_size = page.texture.mips.first().map_or(0, |mip| mip.size);
+        if let Err(error) = texture_limits.validate(page.texture.layers, tile_size) {
+            let detail = format!("chunk texture page exceeds adapter limits: {error:?}");
+            (observer.0)("failed", Some(&detail));
+            return;
+        }
+    }
+    let detail = adapter_info.map(|info| {
+        format!(
+            "{} ({:?}, maxTextureArrayLayers={})",
+            info.name, info.device_type, limits.max_texture_array_layers
+        )
+    });
+    (observer.0)("ready", detail.as_deref());
 }

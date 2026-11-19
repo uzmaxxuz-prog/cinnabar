@@ -27,9 +27,11 @@ a { color: #a9dad2; }
 import init, { Page, Carriers, BrowserInput, SoundSource, sound_bank_filename, sound_bank_header_bytes, sound_bank_prefix_bytes, manifest_limit } from "./pkg/web_client.js";
 import { boundedBytes, downloadCarriers, canvasEdges, pageLifecycle } from "./edges.mjs";
 import { openSoundBank } from "./audio.mjs";
+import { checkWebGpu, credentialsFor, extractReleaseId } from "./webgpu.mjs";
 /** Finds a page control by its stable DOM identifier. */
 const element = (id) => document.getElementById(id);
 const status = element("status");
+const releaseId = extractReleaseId(location.pathname);
 
 /** Shows account state using text nodes; relay URLs never become HTML. */
 function observe(json) {
@@ -47,21 +49,26 @@ function observe(json) {
 }
 
 /** Loads startup assets from an HTTPS directory using Rust's canonical names and validators. */
-async function prepare(input) {
-  const base = new URL(element("assets").value);
+async function prepare(input, onRenderer) {
+  status.textContent = "Checking WebGPU…";
+  const gpu = await checkWebGpu({ navigator, isSecureContext });
+  if (!gpu.ok) throw new Error(gpu.message);
+  status.textContent = "Downloading assets…";
+  const base = new URL(element("assets").value || new URL("./assets/", location.href).href);
   if (base.protocol !== "https:" || !base.pathname.endsWith("/")) throw new Error("Use an HTTPS asset directory ending in /");
-  const manifestResponse = await fetch(new URL("manifest.json", base), { credentials: "omit" });
-  if (!manifestResponse.ok) throw new Error("Delivery manifest unavailable");
+  const credentials = credentialsFor(base, location.origin);
+  const manifestResponse = await fetch(new URL("manifest.json", base), { credentials, redirect: "error" });
+  if (!manifestResponse.ok) throw new Error(`Delivery manifest unavailable (${manifestResponse.status})`);
   const manifest = JSON.parse(new TextDecoder().decode(await boundedBytes(manifestResponse, manifest_limit(), false)));
   let carriers = new Carriers(JSON.stringify(manifest));
   let audio;
   try {
-    await downloadCarriers(carriers, manifest, base);
+    await downloadCarriers(carriers, manifest, base, fetch, credentials);
     const prepared = carriers;
     carriers = null;
     const identity = crypto.getRandomValues(new BigInt64Array(1))[0] || 1n;
     try {
-      const bank = await openSoundBank(new URL(sound_bank_filename(), base), sound_bank_header_bytes(), sound_bank_prefix_bytes);
+      const bank = await openSoundBank(new URL(sound_bank_filename(), base), sound_bank_header_bytes(), sound_bank_prefix_bytes, fetch, credentials);
       audio = new SoundSource(bank.prefix, bank.total, bank.source);
       element("audio-status").textContent = "Click the game to enable sound.";
     } catch (error) {
@@ -69,21 +76,61 @@ async function prepare(input) {
     }
     const sound = audio;
     audio = undefined;
-    return prepared.boot("#game", input, identity, sound);
+    status.textContent = "Starting renderer…";
+    return prepared.boot("#game", input, identity, sound, onRenderer);
   } finally { carriers?.free(); audio?.free(); }
 }
 
 try {
   await init();
+  if (!element("relay").value) element("relay").value = location.origin;
+  if (!element("assets").value) element("assets").value = new URL("./assets/", location.href).href;
+  if (releaseId) {
+    try {
+      const configResponse = await fetch(new URL("/access/client-config", location.origin), { credentials: "same-origin", redirect: "error" });
+      if (configResponse.ok) {
+        const config = await configResponse.json();
+        if (typeof config?.game_target === "string" && config.game_target && !element("server").value) {
+          element("server").value = config.game_target;
+        }
+      }
+    } catch {}
+  }
+  status.textContent = "Ready to start client.";
   let page;
   let game;
   let pageOrigin;
+  let rendererReady = false;
+  let rendererFailed = false;
+  const failRenderer = (message) => {
+    rendererFailed = true;
+    rendererReady = false;
+    element("join").disabled = true;
+    status.textContent = `Renderer failed: ${message}`;
+  };
+  window.addEventListener("error", (event) => {
+    if (game && !rendererReady) failRenderer(event?.message || "unexpected runtime error");
+  });
+  window.addEventListener("unhandledrejection", (event) => {
+    if (game && !rendererReady) failRenderer(event?.reason?.message || String(event?.reason || "unhandled rejection"));
+  });
+  const onRenderer = (json) => {
+    const event = JSON.parse(json);
+    if (event.state === "ready" && !rendererFailed) {
+      rendererReady = true;
+      element("join").disabled = false;
+      element("disconnect").disabled = false;
+      status.textContent = "Client ready. Connect the relay, then join a server.";
+    } else if (event.state === "failed") {
+      failRenderer(event.detail || "renderer initialization failed");
+    }
+  };
   element("connect").onclick = () => {
     try {
       const relay = new URL(element("relay").value || location.origin);
       if (relay.protocol !== "https:") throw new Error("Relay requires HTTPS");
       if (page && pageOrigin === relay.origin) page.reconnect();
-      else { page?.free(); page = new Page(relay.origin, observe); pageOrigin = relay.origin; }
+      else { page?.free(); page = new Page(relay.origin, observe, releaseId || undefined); pageOrigin = relay.origin; }
     } catch (error) { status.textContent = error.message; }
   };
   element("fresh").onclick = () => page?.fresh_session();
@@ -91,16 +138,19 @@ try {
   element("sign-out").onclick = () => { try { page?.sign_out(); } catch (error) { status.textContent = error.message; } };
   element("prepare").onclick = async () => {
     element("prepare").disabled = true;
+    rendererReady = false;
+    rendererFailed = false;
     try {
-      game = await prepare(input);
-      element("join").disabled = false;
-      element("disconnect").disabled = false;
-      status.textContent = "Client started. Connect the relay, then join a server.";
+      game = await prepare(input, onRenderer);
+      if (!rendererReady && !rendererFailed) {
+        status.textContent = "Starting renderer…";
+      }
     } catch (error) { status.textContent = error.message; }
     finally { element("prepare").disabled = Boolean(game); }
   };
   element("join").onclick = () => {
     try {
+      if (!rendererReady) throw new Error("Renderer is not ready");
       if (!page) throw new Error("Connect the relay first");
       game?.join(page, element("server").value);
     } catch (error) { status.textContent = error.message; }

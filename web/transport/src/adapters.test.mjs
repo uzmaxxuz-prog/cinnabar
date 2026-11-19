@@ -375,3 +375,14 @@ test("retired prefix probes backpressure stream admission without resetting the 
         assert.deepEqual(await adapter.read(await adapter.acceptPacks(t)), fresh.bytes);
     } finally { adapter.close(t); }
 });
+
+test("WebSocket transport attaches non-secret release query parameter when configured", async () => {
+    const release = "b".repeat(64);
+    const t = adapter.create("https://relay.invalid", false, JSON.stringify({ ...config, release }));
+    try {
+        await adapter.open(t, config.control);
+        assert.equal(Socket.instances.at(-1).url.searchParams.get("release"), release);
+        await adapter.open(t, values.RELAY_CHANNEL_PLAY, "1");
+        assert.equal(Socket.instances.at(-1).url.searchParams.get("release"), release);
+    } finally { adapter.close(t); }
+});

@@ -43,10 +43,22 @@ pub struct BrowserTransport(JsValue);
 impl BrowserTransport {
     /// Creates a cancellable candidate with wire values supplied by the generated contract.
     pub fn new(origin: &str, quic: bool) -> Result<Self, CloseReason> {
-        let config = serde_json::json!({"transport": RELAY_TRANSPORT_PATH,
+        Self::new_with_release(origin, quic, None)
+    }
+
+    /// Creates a cancellable candidate carrying an optional non-secret release identifier on WebSocket channels.
+    pub fn new_with_release(
+        origin: &str,
+        quic: bool,
+        release: Option<&str>,
+    ) -> Result<Self, CloseReason> {
+        let mut config = serde_json::json!({"transport": RELAY_TRANSPORT_PATH,
             "controlPath": RELAY_CONTROL_PATH, "playPath": RELAY_PLAY_PATH,
             "control": RELAY_CHANNEL_CONTROL, "protocol": RELAY_SOCKET_PROTOCOL,
             "controlBytes": RELAY_CONTROL_BYTES, "playBytes": RELAY_PLAY_MESSAGE_BYTES, "chunks": bridge::contract::QUEUED_FRAMES});
+        if let Some(release) = release.filter(|value| !value.is_empty()) {
+            config["release"] = serde_json::Value::String(release.to_owned());
+        }
         create(origin, quic, &config.to_string())
             .map(Self)
             .map_err(|_| CloseReason::Transport)
