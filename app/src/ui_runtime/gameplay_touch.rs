@@ -25,6 +25,32 @@ use world_gestures::{WorldTarget, WorldTouches};
 /// Provisional until measured against the native touch look curve.
 const LOOK_GAIN: [f32; 2] = [4.0, 2.0];
 
+/// One discovery update can retain a start, multiple moves and a terminal edge per contact.
+pub(crate) const MAX_DISCOVERY_EVENTS: usize = 8 * semantic_input::MAX_TOUCH_CONTACTS;
+
+#[derive(Default)]
+pub(crate) struct GameplayTouchReader {
+    cursor: MessageCursor<TouchInput>,
+    awaiting_paint: Vec<TouchInput>,
+}
+
+impl GameplayTouchReader {
+    /// Drains every native message. An overflowing discovery batch is discarded as a whole,
+    /// since truncation could keep a start while losing its cancellation or release.
+    fn drain(&mut self, messages: Option<&Messages<TouchInput>>, discovery: bool) -> Option<Vec<TouchInput>> {
+        let mut events = std::mem::take(&mut self.awaiting_paint);
+        if let Some(messages) = messages {
+            let incoming = self.cursor.read(messages);
+            if discovery && events.len().saturating_add(incoming.len()) > MAX_DISCOVERY_EVENTS {
+                incoming.count();
+                return None;
+            }
+            events.extend(incoming.cloned());
+        }
+        Some(events)
+    }
+}
+
 /// One frame of touch events applied to the captured fingers.
 #[derive(Debug, Default, PartialEq)]
 struct TouchFrame {
@@ -185,7 +211,7 @@ pub(crate) fn drive_gameplay_touch_targets(
     touch_input: Option<Res<Messages<TouchInput>>>,
     gate: Option<Res<GameplayTouchGate>>,
     #[cfg(not(target_arch = "wasm32"))] claimed: Option<Res<super::touch_pointer::UiTouchStarts>>,
-    mut touch_cursor: Local<MessageCursor<TouchInput>>,
+    mut reader: Local<GameplayTouchReader>,
     mut ui: ResMut<UiRuntimeResource>,
     mut targets: ResMut<SemanticTouchTargets>,
     player: Option<ResMut<client_state::PlayerRuntime>>,
@@ -198,15 +224,9 @@ pub(crate) fn drive_gameplay_touch_targets(
     mut world_touches: WorldTouchContext,
 ) {
     targets.release_all();
-    // Bevy retains the previous update's native batch. Save only its cursor when the
-    // discovery gesture arrives before the HUD paint, preserving order without another queue.
-    let discovery = (gate.as_deref() == Some(&GameplayTouchGate::AwaitingFirstPaint))
-        .then(|| (*touch_cursor).clone());
-    let events: Vec<_> = touch_input
-        .as_deref()
-        .map(|messages| touch_cursor.read(messages).cloned().collect())
-        .unwrap_or_default();
-    if gate.as_deref() == Some(&GameplayTouchGate::Closed) {
+    let discovery = gate.as_deref() == Some(&GameplayTouchGate::AwaitingFirstPaint);
+    let events = reader.drain(touch_input.as_deref(), discovery);
+    let Some(events) = events.filter(|_| gate.as_deref() != Some(&GameplayTouchGate::Closed)) else {
         *touches = Touches::default();
         state.clear();
         world_touches.forget();
@@ -215,7 +235,7 @@ pub(crate) fn drive_gameplay_touch_targets(
             presentation.close_touch_utilities();
         }
         return;
-    }
+    };
     let Some(mut presentation) = presentation.filter(|view| view.touch_controls_enabled()) else {
         state.clear();
         world_touches.forget();
@@ -239,9 +259,10 @@ pub(crate) fn drive_gameplay_touch_targets(
         presentation.close_touch_utilities();
         return;
     };
-    if let Some(before_discovery) = discovery {
-        // Restore only an admitted gameplay batch. Every rejection above drained it.
-        *touch_cursor = before_discovery;
+    if discovery {
+        // Starts can arrive before First rotates Bevy's buffers. The next First may
+        // already discard them, so retain this admitted batch until the following Update.
+        reader.awaiting_paint = events;
         return;
     }
     // Panels and modals over the world own touches, so mod buttons beneath them never fire.

@@ -243,8 +243,15 @@ fn browser_first_hybrid_drag_turns_after_the_first_touch_hud_paint() {
     send(&mut app, window, 7, TouchPhase::Started, at);
     app.update();
     paint_hud(&mut app);
+    let region = app.world().resource::<UiPresentationResource>()
+        .gameplay_touch_region([at.x / 1280., at.y / 720.], [1280., 720.]).unwrap();
+    assert_eq!(region.hit_id, touch::LOOK_SURFACE);
+    assert!(app.world().resource::<Touches>().get_pressed(7).is_some());
     send(&mut app, window, 7, TouchPhase::Moved, at + Vec2::X * 96.);
     app.update();
+    let targets = app.world().resource::<semantic_controls::SemanticTouchTargets>();
+    assert_eq!(targets.target(7), Some(touch::LOOK_SURFACE));
+    assert!(targets.delta(7).unwrap()[0] > 0.);
     assert!(app.world().resource::<SemanticInputSnapshot>().look_delta()[0].abs() > 0.);
 }
 
@@ -325,4 +332,53 @@ fn browser_draining_touch_keeps_desktop_focus_quarantine() {
     desktop(&mut app, true);
     app.update();
     assert!(app.world().resource::<SemanticInputSnapshot>().movement()[1] > 0.);
+}
+
+#[test]
+fn browser_first_hybrid_tap_preserves_its_end_before_the_hud_paint() {
+    let (mut app, window) = gameplay_app();
+    let at = Vec2::new(730., 230.);
+    surface(&mut app, false, false, false);
+    app.update();
+    paint_hud(&mut app);
+    surface(&mut app, true, true, false);
+    send(&mut app, window, 7, TouchPhase::Started, at);
+    send(&mut app, window, 7, TouchPhase::Ended, at);
+    app.update();
+    paint_hud(&mut app);
+    let mut uses = 0;
+    for _ in 0..5 {
+        app.update();
+        if app.world().resource::<SemanticInputSnapshot>().phase(Action::Use).pressed {
+            uses += 1;
+        }
+    }
+    assert_eq!(uses, 1);
+}
+
+#[test]
+fn browser_overflow_discards_every_contact_in_the_discovery_batch() {
+    use crate::ui_runtime::gameplay_touch::MAX_DISCOVERY_EVENTS;
+    let (mut app, window) = gameplay_app();
+    let at = Vec2::new(730., 230.);
+    surface(&mut app, false, false, false);
+    app.update();
+    paint_hud(&mut app);
+    surface(&mut app, true, true, false);
+    send(&mut app, window, 7, TouchPhase::Started, at);
+    send(&mut app, window, 8, TouchPhase::Started, at);
+    for _ in 0..MAX_DISCOVERY_EVENTS {
+        send(&mut app, window, 7, TouchPhase::Moved, at);
+    }
+    send(&mut app, window, 7, TouchPhase::Canceled, at);
+    app.update();
+    assert_eq!(app.world().resource::<Touches>().iter().count(), 0);
+    paint_hud(&mut app);
+    send(&mut app, window, 8, TouchPhase::Moved, at + Vec2::X * 96.);
+    app.update();
+    assert_eq!(app.world().resource::<SemanticInputSnapshot>().look_delta(), [0.; 2]);
+    let jump = touch_center(&app, touch::JUMP);
+    send(&mut app, window, 8, TouchPhase::Started, jump);
+    app.update();
+    assert!(app.world().resource::<SemanticInputSnapshot>().phase(Action::Jump).pressed);
 }
