@@ -20,6 +20,7 @@ mod mod_buttons;
 mod utilities;
 
 const SCREEN: &str = "cinnabar_touch.screen";
+const SHOW_SCREEN_CONTROLS: &str = "#touch_screen_controls_shown";
 const LAYOUT: &[u8] = assets::TOUCH_LAYOUT;
 /// Each control's name in the layout, which its `cinnabar.touch.<name>` button id and
 /// `#touch_<name>_pressed` binding carry.
@@ -46,6 +47,7 @@ const UTILITY_ACTIONS: &[(&str, u16)] = &[
 #[derive(Default)]
 pub(in super::super) struct TouchControls {
     enabled: bool,
+    gameplay_only: bool,
     mode: TouchControlMode,
     utilities_open: bool,
     debug_toggle_pending: bool,
@@ -80,9 +82,9 @@ pub(in super::super) struct TouchControls {
 }
 
 impl TouchControls {
-    /// Whether gameplay should publish touch-specific HUD controls.
-    pub(super) fn enabled(&self) -> bool {
-        self.enabled
+    /// Whether the hotbar should include its touch inventory button.
+    pub(super) fn shows_inventory(&self) -> bool {
+        self.enabled && !self.gameplay_only
     }
 
     /// Retires the last build's geometry, so hidden controls cannot take touches.
@@ -99,6 +101,17 @@ impl UiPresentationRuntime {
         self.screens.touch.enabled = enabled;
         if !enabled {
             self.close_touch_utilities();
+        }
+    }
+
+    /// Restricts the HUD to controls handled by a host without screen navigation.
+    pub fn set_touch_gameplay_only(&mut self, gameplay_only: bool) {
+        let state = &mut self.screens.touch;
+        if state.gameplay_only != gameplay_only {
+            state.gameplay_only = gameplay_only;
+            state.utilities_open = false;
+            state.base_viewport = None;
+            state.begin_frame();
         }
     }
 
@@ -227,6 +240,7 @@ impl UiPresentationRuntime {
             );
         }
         let mut data = DataSource::new();
+        data.set_global(SHOW_SCREEN_CONTROLS, Scalar::Bool(!state.gameplay_only));
         set_mode_bindings(&mut data, state.mode);
         if state.mode.uses_dpad() {
             set_dpad_bindings(&mut data, &state.contacts);
@@ -234,7 +248,7 @@ impl UiPresentationRuntime {
         data.set_global("#touch_editor_open", Scalar::Bool(state.editor.is_some()));
         data.set_global(
             "#touch_utilities_open",
-            Scalar::Bool(state.utilities_open && state.editor.is_none()),
+            Scalar::Bool(!state.gameplay_only && state.utilities_open && state.editor.is_none()),
         );
         data.set_global(
             "#touch_debug_overlay_active",
@@ -284,7 +298,8 @@ impl UiPresentationRuntime {
             let rollback = (paint.nodes.len(), *paint.next);
             let base_view = ViewState::default();
             let mut base_data = DataSource::new();
-            base_data.set_global("#touch_utilities_open", Scalar::Bool(true));
+            base_data.set_global(SHOW_SCREEN_CONTROLS, Scalar::Bool(!state.gameplay_only));
+            base_data.set_global("#touch_utilities_open", Scalar::Bool(!state.gameplay_only));
             set_mode_bindings(&mut base_data, state.mode);
             state.base = renderer.draw(ScreenArt::default(), &mut paint, |env, root| {
                 screen.render_with(
@@ -419,6 +434,11 @@ fn layout_catalog(
     let controls = layout["screen"]["controls"]
         .as_array_mut()
         .expect("touch controls array");
+    let utilities = controls.iter_mut().find_map(|node| node.get_mut("utilities"))
+        .expect("touch layout has a utilities row");
+    utilities["bindings"] = serde_json::json!([{
+        "binding_name": SHOW_SCREEN_CONTROLS, "binding_name_override": "#visible"
+    }]);
     for (name, text, y, scale) in [
         ("editor_title", "Touch controls", 28., 1.2),
         (

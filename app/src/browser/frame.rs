@@ -6,7 +6,8 @@ use crate::{
 use bevy::prelude::*;
 use client_state::ClientFrameSet;
 
-use crate::browser_input::{CanvasCapture, sample_input, screen_focus};
+use crate::browser_input::{CanvasCapture, prepare_canvas_input, sample_input, screen_focus};
+use crate::ui_runtime::gameplay_touch::{GameplayTouchGate, drive_gameplay_touch_targets};
 
 /// Installs production owners in the same authority, simulation and publication phases.
 pub(super) fn configure(app: &mut App) {
@@ -17,7 +18,7 @@ pub(super) fn configure(app: &mut App) {
     crate::game_frame::configure_client_frame_schedule(app);
     crate::game_frame::configure_world(app);
     crate::melee::server_swings::configure(app);
-    app.init_resource::<CanvasCapture>();
+    app.init_resource::<CanvasCapture>().init_resource::<GameplayTouchGate>();
     app.add_plugins((
         client_runtime::ClientRuntimePlugin::<network::resource_packs::PackApplication>::default(),
         client_presentation::ClientPresentationPlugin,
@@ -42,7 +43,12 @@ pub(super) fn configure(app: &mut App) {
             report_renderer_startup,
         ),
     )
-    .add_systems(Update, sample_input.in_set(ClientFrameSet::RawInput))
+    .add_systems(
+        Update,
+        (prepare_canvas_input, drive_gameplay_touch_targets, sample_input)
+            .chain()
+            .in_set(ClientFrameSet::RawInput),
+    )
     .add_systems(
         Update,
         semantic_controls::route_semantic_input.in_set(ClientFrameSet::SemanticSample),

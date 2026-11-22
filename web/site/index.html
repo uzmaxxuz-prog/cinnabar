@@ -6,11 +6,11 @@
 <style>
 body { margin: 2rem auto; padding: 0 1rem; max-width: 60rem; color: #eee; background: #182021; font: 1rem system-ui; }
 label { display: block; margin: 1rem 0; } input { width: min(90%, 32rem); padding: .5rem; }
-button { padding: .6rem 1rem; } canvas { display: block; width: 100%; height: 40vh; margin-top: 2rem; background: #0a1012; }
+button { padding: .6rem 1rem; } canvas { touch-action: none; display: block; width: 100%; height: 40vh; margin-top: 2rem; background: #0a1012; }
 a { color: #a9dad2; }
 </style>
 <h1>Browser client setup</h1>
-<p>Start the client with a verified asset directory, connect your relay, then join a server. Click the game to capture the mouse; press Escape to release it.</p>
+<p>Start the client with a verified asset directory, connect your relay, then join a server. Use the on-screen controls on a touchscreen. With a mouse, click the game to capture it and press Escape to release it.</p>
 <label>Relay origin <input id="relay" type="url" placeholder="Uses this page's HTTPS origin"></label>
 <button id="connect">Connect relay</button>
 <button id="fresh">New session</button>
@@ -20,12 +20,13 @@ a { color: #a9dad2; }
 <button id="prepare">Start client</button>
 <label>Server address <input id="server" placeholder="Server address and optional port" maxlength="255"></label>
 <button id="join" disabled>Join server</button> <button id="disconnect" disabled>Disconnect</button>
+<button id="fullscreen" disabled>Play fullscreen</button>
 <p id="status" role="status">Loading browser module…</p>
 <p id="audio-status" role="status"></p>
-<canvas id="game" aria-label="Client canvas"></canvas>
+<canvas id="game" tabindex="0" aria-label="Client canvas"></canvas>
 <script type="module">
 import init, { Page, Carriers, BrowserInput, SoundSource, sound_bank_filename, sound_bank_header_bytes, sound_bank_prefix_bytes, manifest_limit } from "./pkg/web_client.js";
-import { boundedBytes, downloadCarriers, canvasEdges, pageLifecycle } from "./edges.mjs";
+import { boundedBytes, downloadCarriers, bindFullscreen, canvasEdges, pageLifecycle } from "./edges.mjs";
 import { openSoundBank } from "./audio.mjs";
 import { checkWebGpu, credentialsFor, extractReleaseId } from "./webgpu.mjs";
 /** Finds a page control by its stable DOM identifier. */
@@ -152,10 +153,17 @@ try {
     try {
       if (!rendererReady) throw new Error("Renderer is not ready");
       if (!page) throw new Error("Connect the relay first");
-      game?.join(page, element("server").value);
+      game.join(page, element("server").value);
+      element("fullscreen").disabled = false;
     } catch (error) { status.textContent = error.message; }
   };
-  element("disconnect").onclick = () => game?.disconnect();
+  const stopFullscreen = bindFullscreen(element("fullscreen"), element("game"), (error) => {
+    status.textContent = `Fullscreen unavailable: ${error.message}`;
+  });
+  element("disconnect").onclick = () => {
+    element("fullscreen").disabled = true;
+    game?.disconnect();
+  };
   const input = new BrowserInput();
   const audio = {
     /** Resumes the context retained by the game's output device. */
@@ -165,7 +173,7 @@ try {
   };
   const stop = canvasEdges(element("game"), input, audio);
   pageLifecycle(input, audio, () => page, () => {
-    stop(); game?.free(); input.free(); page?.free();
+    stopFullscreen(); stop(); game?.free(); input.free(); page?.free();
   });
 } catch (error) { status.textContent = error.message; }
 

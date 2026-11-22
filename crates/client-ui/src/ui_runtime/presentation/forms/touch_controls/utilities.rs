@@ -4,7 +4,8 @@ use super::*;
 impl UiPresentationRuntime {
     /// Opens or dismisses the utility dropdown without capturing gameplay fingers.
     pub fn toggle_touch_utilities(&mut self) {
-        self.screens.touch.utilities_open = !self.screens.touch.utilities_open;
+        let state = &mut self.screens.touch;
+        state.utilities_open = !state.gameplay_only && !state.utilities_open;
     }
 
     /// Dismisses the dropdown when gameplay loses input or a menu choice is selected.

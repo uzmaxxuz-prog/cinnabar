@@ -144,7 +144,7 @@ impl UiPresentationRuntime {
                 hidden.hides_position(),
                 renderer.catalog(),
             );
-            let touch_inventory = self.screens.touch.enabled();
+            let touch_inventory = self.screens.touch.shows_inventory();
             if self.hud_cache.model.touch_inventory != touch_inventory {
                 self.hud_cache.model.touch_inventory = touch_inventory;
                 changes.status = true;

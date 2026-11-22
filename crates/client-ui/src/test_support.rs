@@ -81,6 +81,35 @@ pub fn mini_carrier() -> Arc<RuntimeUiAssets> {
     Arc::new(RuntimeUiAssets::decode(&bytes).unwrap())
 }
 
+/// Paints a nine-cell hotbar and a visibility-bound inventory button without installed assets.
+pub fn touch_hud_presentation() -> UiPresentationRuntime {
+    let carrier = mini_carrier();
+    let files = [
+        ("ui/_global_variables.json", "{}"),
+        ("ui/_ui_defs.json", r#"{"ui_defs":["ui/hud.json"]}"#),
+        ("ui/hud.json", r##"{
+            "namespace":"hud",
+            "hud_screen":{"type":"screen","absorbs_input":false,"is_modal":false,
+                "render_game_behind":true,"controls":[
+                {"slots":{"type":"grid","collection_name":"hotbar_items",
+                    "anchor_from":"bottom_middle","anchor_to":"bottom_middle",
+                    "grid_dimensions":[9,1],"grid_item_template":"hud.slot","size":[180,20]}},
+                {"inventory":{"type":"button","size":[20,20],"anchor_from":"bottom_right",
+                    "anchor_to":"bottom_right","bindings":[{"binding_name":"#inventory_touch_button",
+                    "binding_name_override":"#visible"}],"button_mappings":[{"from_button_id":"button.menu_select",
+                    "to_button_id":"button.hotbar_inventory_button","mapping_type":"pressed"}]}}
+            ]},
+            "slot":{"type":"button","size":[20,20],"bindings":[{"binding_type":"collection_details",
+                "binding_collection_name":"hotbar_items"}],"button_mappings":[{"from_button_id":"button.menu_select",
+                "to_button_id":"button.hotbar_select","mapping_type":"pressed"}]}
+        }"##),
+    ].map(|(path, text)| UiFile { path: path.into(), bytes: text.as_bytes().into() });
+    let bytes = encode_ui_catalog(carrier.source_manifest_sha256(), carrier.atlas_pages(), &[], &[], &files).unwrap();
+    let mut presentation = UiPresentationRuntime::new(fixture_font()).unwrap();
+    presentation.enable_json_ui_inline(Arc::new(RuntimeUiAssets::decode(&bytes).unwrap())).unwrap();
+    presentation
+}
+
 /// Enables the minimal carrier on a deterministic font fixture.
 pub fn mini_engine_presentation() -> UiPresentationRuntime {
     let mut presentation = UiPresentationRuntime::new(fixture_font()).unwrap();

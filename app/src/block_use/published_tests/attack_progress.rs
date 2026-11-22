@@ -866,7 +866,8 @@ fn middle_click_requests_the_nearer_mob_and_respects_block_occlusion() {
 
 #[test]
 fn browser_canvas_pick_binding_publishes_one_request_per_press() {
-    use crate::browser_input::{BrowserOptions, CanvasCapture, InputSource, sample_input};
+    use crate::browser_input::{BrowserOptions, CanvasCapture, InputSource, prepare_canvas_input, sample_input};
+    use crate::ui_runtime::gameplay_touch::GameplayTouchGate;
     use launcher::menu::settings_options::BindingId;
     use semantic_input::{ButtonEdges, DeviceFrame, KeyboardMouseFrame, PhysicalControl};
 
@@ -894,6 +895,13 @@ fn browser_canvas_pick_binding_publishes_one_request_per_press() {
             );
             world.insert_resource(options);
             world.init_resource::<CanvasCapture>();
+            world.init_resource::<GameplayTouchGate>();
+            world.init_resource::<bevy::input::mouse::AccumulatedMouseScroll>();
+            world.init_resource::<bevy::input::touch::Touches>();
+            world.init_resource::<crate::semantic_controls::SemanticTouchTargets>();
+            world.insert_resource(client_shell::ui_resources::UiPresentationResource(
+                client_ui::test_support::mini_engine_presentation()
+            ));
             for (pressed, held, focus_lost, ui_focused, count) in [
                 (true, true, false, false, 1),
                 (false, true, false, false, 0),
@@ -917,14 +925,17 @@ fn browser_canvas_pick_binding_publishes_one_request_per_press() {
                     }
                     _ => unreachable!(),
                 }
-                world.insert_non_send(InputSource(Box::new(move || DeviceFrame {
-                    keyboard_mouse: Some(keyboard.clone()),
-                    window_focus_lost: focus_lost,
-                    ..Default::default()
+                world.insert_non_send(InputSource(Box::new(move || {
+                    DeviceFrame {
+                        keyboard_mouse: Some(keyboard.clone()),
+                        window_focus_lost: focus_lost,
+                        ..Default::default()
+                    }.into()
                 })));
                 world
                     .resource_mut::<client_state::ScreenFocus>()
                     .absorbs_input = ui_focused;
+                world.run_system_cached(prepare_canvas_input).unwrap();
                 world.run_system_cached(sample_input).unwrap();
                 world
                     .run_system_cached(crate::pick_block::produce_pick_block)

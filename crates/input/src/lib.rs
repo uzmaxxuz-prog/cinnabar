@@ -25,7 +25,7 @@ pub use desktop::{KEYBOARD_USAGES, KeyboardKey, ScrollUnit};
 pub use device::{
     ButtonEdges, ControllerFrame, DeviceFrame, FrameError, KeyboardMouseFrame,
     MAX_CONTROLLER_BUTTONS, MAX_CONTROLLERS, MAX_DISCONNECTED_CONTROLLERS, MAX_KEYBOARD_KEYS,
-    MAX_MOUSE_BUTTONS, MAX_TOUCH_CONTACTS, MAX_TOUCH_CONTROLS, TouchAxis, TouchContact,
+    MAX_MOUSE_BUTTONS, MAX_TOUCH_CONTACTS, MAX_TOUCH_CONTROLS, SurfaceInputFrame, TouchAxis, TouchContact,
     TouchControl, TouchControlKind, TouchControlLayout, TouchLayoutError,
 };
 pub use ordered::{ActionButtons, ActionEvent, DesktopEvent, DesktopEvents, OrderedActions};

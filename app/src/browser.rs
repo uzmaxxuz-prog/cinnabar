@@ -27,11 +27,11 @@ pub fn run(
     startup: StartupCarriers,
     canvas: String,
     identity: protocol::ClientRandomId,
-    input: Box<dyn FnMut() -> semantic_input::DeviceFrame>,
+    mut input: Box<dyn FnMut() -> semantic_input::DeviceFrame>,
     audio: Option<client_audio::audio::SoundBank>,
     output: client_audio::named_audio::AudioDevice,
 ) -> anyhow::Result<Host> {
-    run_with_observer(startup, canvas, identity, input, audio, output, None)
+    run_with_observer(startup, canvas, identity, Box::new(move || input().into()), audio, output, None)
 }
 
 /// Starts the renderer and notifies `observer` once the GPU device initializes or fails validation.
@@ -39,7 +39,7 @@ pub fn run_with_observer(
     startup: StartupCarriers,
     canvas: String,
     identity: protocol::ClientRandomId,
-    input: Box<dyn FnMut() -> semantic_input::DeviceFrame>,
+    input: Box<dyn FnMut() -> semantic_input::SurfaceInputFrame>,
     audio: Option<client_audio::audio::SoundBank>,
     output: client_audio::named_audio::AudioDevice,
     observer: Option<RendererStatusObserver>,

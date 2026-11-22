@@ -22,7 +22,10 @@ pub struct BrowserInput {
 #[derive(Default)]
 struct InputState {
     frame: KeyboardMouseFrame,
-    focused: bool,
+    mouse_captured: bool,
+    touch_capable: bool,
+    touch_active: bool,
+    reset_touch: bool,
 }
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 impl BrowserInput {
@@ -85,17 +88,50 @@ impl BrowserInput {
             }
         }
     }
-    /// Sets canvas capture ownership; losing it retires every held control.
+    /// Sets the canvas's mouse lock. A late unlock cannot revoke a newer touch owner.
     pub fn focus(&mut self, focused: bool) {
-        if !focused {
+        if focused {
+            let mut state = self.shared.borrow_mut();
+            if state.touch_active {
+                state.reset_touch = true;
+            }
+            state.touch_active = false;
+            state.mouse_captured = true;
+        } else if self.shared.borrow().mouse_captured {
             self.release();
         }
-        self.shared.borrow_mut().focused = focused;
+    }
+    /// Records whether to show touch controls before the first gesture.
+    pub fn set_touch_capable(&mut self, capable: bool) {
+        let mut state = self.shared.borrow_mut();
+        if !capable && state.touch_active {
+            state.touch_active = false;
+            state.reset_touch = true;
+        }
+        state.touch_capable = capable;
+    }
+    /// Admits native contacts after an unlocked canvas receives a touch.
+    pub fn begin_touch(&mut self) {
+        let mut state = self.shared.borrow_mut();
+        state.frame = KeyboardMouseFrame::default();
+        state.mouse_captured = false;
+        state.touch_capable = true;
+        state.touch_active = true;
+    }
+    /// Retires touch contacts captured against a previous viewport. Desktop capture is independent.
+    pub fn touch_geometry_changed(&mut self) {
+        let mut state = self.shared.borrow_mut();
+        if state.touch_active {
+            state.touch_active = false;
+            state.reset_touch = true;
+        }
     }
     /// Releases held controls on blur or pointer-lock loss, preserving release edges.
     pub fn release(&mut self) {
         let state = &mut *self.shared.borrow_mut();
-        state.focused = false;
+        state.mouse_captured = false;
+        state.touch_active = false;
+        state.reset_touch = true;
         for key in state.frame.keys.clone() {
             update(
                 &mut state.frame.keys,
@@ -119,12 +155,30 @@ impl BrowserInput {
 impl BrowserInput {
     /// Consumes the canvas sample at the game's raw-input boundary.
     pub fn take_device(&mut self) -> semantic_input::DeviceFrame {
-        let focused = self.shared.borrow().focused;
+        let surface = self.take_surface();
+        if surface.reset_touch {
+            return semantic_input::DeviceFrame { window_focus_lost: true, ..Default::default() };
+        }
+        surface.device
+    }
+    /// Consumes a focus reset once, even if a gesture has already restored ownership.
+    pub fn take_surface(&mut self) -> semantic_input::SurfaceInputFrame {
         let keyboard = self.take();
-        semantic_input::DeviceFrame {
-            keyboard_mouse: focused.then_some(keyboard),
-            window_focus_lost: !focused,
-            ..Default::default()
+        let mut state = self.shared.borrow_mut();
+        let reset_touch = std::mem::take(&mut state.reset_touch);
+        if reset_touch {
+            state.frame = KeyboardMouseFrame::default();
+        }
+        semantic_input::SurfaceInputFrame {
+            device: semantic_input::DeviceFrame {
+                keyboard_mouse: (state.mouse_captured && !reset_touch).then_some(keyboard),
+                // A captured mouse still owns the canvas during the neutral reset frame.
+                window_focus_lost: !state.mouse_captured && (!state.touch_active || reset_touch),
+                ..Default::default()
+            },
+            touch_capable: state.touch_capable,
+            touch_active: state.touch_active,
+            reset_touch,
         }
     }
     /// Consumes transient edges once while retaining held controls.
@@ -202,6 +256,50 @@ mod tests {
         let regained = game.take_device();
         assert!(!regained.window_focus_lost);
         assert!(regained.keyboard_mouse.unwrap().keys.is_empty());
+    }
+
+    #[test]
+    fn resized_touch_geometry_forgets_contacts_and_preserves_mouse_capture() {
+        let mut input = BrowserInput::new();
+        input.begin_touch();
+        input.touch_geometry_changed();
+        let resized = input.take_surface();
+        assert!(resized.reset_touch && resized.touch_capable && !resized.touch_active);
+        assert!(!input.take_surface().reset_touch);
+        input.focus(true);
+        input.key("KeyW", true);
+        input.touch_geometry_changed();
+        let desktop = input.take_surface();
+        assert!(!desktop.reset_touch && !desktop.device.window_focus_lost);
+        assert_eq!(desktop.device.keyboard_mouse.unwrap().keys, [KeyboardKey::KeyW.usage().unwrap()]);
+    }
+
+    #[test]
+    fn touch_owns_the_surface_until_mouse_capture_or_global_release() {
+        let mut input = BrowserInput::new();
+        input.set_touch_capable(true);
+        let idle = input.take_surface();
+        assert!(idle.touch_capable && !idle.touch_active && idle.device.window_focus_lost);
+        input.begin_touch();
+        input.focus(false);
+        let active = input.take_surface();
+        assert!(active.touch_active && !active.device.window_focus_lost);
+        assert!(active.device.keyboard_mouse.is_none());
+        input.release();
+        input.begin_touch();
+        let reset = input.take_surface();
+        assert!(reset.reset_touch && reset.touch_capable && reset.device.window_focus_lost);
+        let resumed = input.take_surface();
+        assert!(resumed.touch_active && !resumed.reset_touch && !resumed.device.window_focus_lost);
+        input.focus(true);
+        let switching = input.take_surface();
+        assert!(switching.reset_touch && !switching.touch_active);
+        assert!(!switching.device.window_focus_lost && switching.device.keyboard_mouse.is_none());
+        let mouse = input.take_surface();
+        assert!(mouse.touch_capable && !mouse.touch_active && mouse.device.keyboard_mouse.is_some());
+        input.focus(false);
+        let released = input.take_surface();
+        assert!(released.touch_capable && released.reset_touch && !released.touch_active);
     }
 
     #[test]

@@ -8,16 +8,15 @@ use bevy::{
         system::SystemParam,
     },
     input::touch::{TouchInput, TouchPhase, Touches},
-    prelude::{Local, Query, Real, Res, ResMut, Time, With},
+    prelude::{Local, Query, Real, Res, ResMut, Resource, Time, With},
     window::{PrimaryWindow, Window},
 };
 use semantic_input::{TouchContact, TouchControlRegion, TouchControlState, touch};
 
 use crate::{camera::freeform_pick::FreeformPickPoint, semantic_controls::SemanticTouchTargets};
-use client_shell::{
-    menu::MenuRuntime,
-    ui_resources::{UiPresentationResource, UiRuntimeResource},
-};
+#[cfg(not(target_arch = "wasm32"))]
+use client_shell::menu::MenuRuntime;
+use client_shell::ui_resources::{UiPresentationResource, UiRuntimeResource};
 
 pub(crate) mod world_gestures;
 use world_gestures::{WorldTarget, WorldTouches};
@@ -25,6 +24,32 @@ use world_gestures::{WorldTarget, WorldTouches};
 /// Look strength per viewport fraction dragged, wider across for a landscape screen.
 /// Provisional until measured against the native touch look curve.
 const LOOK_GAIN: [f32; 2] = [4.0, 2.0];
+
+/// One discovery update can retain a start, multiple moves and a terminal edge per contact.
+pub(crate) const MAX_DISCOVERY_EVENTS: usize = 8 * semantic_input::MAX_TOUCH_CONTACTS;
+
+#[derive(Default)]
+pub(crate) struct GameplayTouchReader {
+    cursor: MessageCursor<TouchInput>,
+    awaiting_paint: Vec<TouchInput>,
+}
+
+impl GameplayTouchReader {
+    /// Drains every native message. An overflowing discovery batch is discarded as a whole,
+    /// since truncation could keep a start while losing its cancellation or release.
+    fn drain(&mut self, messages: Option<&Messages<TouchInput>>, discovery: bool) -> Option<Vec<TouchInput>> {
+        let mut events = std::mem::take(&mut self.awaiting_paint);
+        if let Some(messages) = messages {
+            let incoming = self.cursor.read(messages);
+            if discovery && events.len().saturating_add(incoming.len()) > MAX_DISCOVERY_EVENTS {
+                incoming.count();
+                return None;
+            }
+            events.extend(incoming.cloned());
+        }
+        Some(events)
+    }
+}
 
 /// One frame of touch events applied to the captured fingers.
 #[derive(Debug, Default, PartialEq)]
@@ -134,6 +159,16 @@ fn apply_touch_events(
     Ok(frame)
 }
 
+/// Installed by hosts that must admit canvas ownership separately from window focus.
+#[derive(Resource, Default, Clone, Copy, Eq, PartialEq)]
+pub(crate) enum GameplayTouchGate {
+    #[default]
+    Closed,
+    /// The discovery press arrived before the newly enabled HUD could paint its targets.
+    AwaitingFirstPaint,
+    Open,
+}
+
 /// What world touches read and publish.
 #[derive(SystemParam)]
 pub(crate) struct WorldTouchContext<'w, 's> {
@@ -174,12 +209,13 @@ impl WorldTouchContext<'_, '_> {
 pub(crate) fn drive_gameplay_touch_targets(
     mut touches: ResMut<Touches>,
     touch_input: Option<Res<Messages<TouchInput>>>,
-    claimed: Option<Res<super::touch_pointer::UiTouchStarts>>,
-    mut touch_cursor: Local<MessageCursor<TouchInput>>,
+    gate: Option<Res<GameplayTouchGate>>,
+    #[cfg(not(target_arch = "wasm32"))] claimed: Option<Res<super::touch_pointer::UiTouchStarts>>,
+    mut reader: Local<GameplayTouchReader>,
     mut ui: ResMut<UiRuntimeResource>,
     mut targets: ResMut<SemanticTouchTargets>,
     player: Option<ResMut<client_state::PlayerRuntime>>,
-    mut menu: Option<ResMut<MenuRuntime>>,
+    #[cfg(not(target_arch = "wasm32"))] mut menu: Option<ResMut<MenuRuntime>>,
     presentation: Option<ResMut<UiPresentationResource>>,
     windows: Query<&Window, With<PrimaryWindow>>,
     mut state: Local<TouchControlState>,
@@ -188,20 +224,31 @@ pub(crate) fn drive_gameplay_touch_targets(
     mut world_touches: WorldTouchContext,
 ) {
     targets.release_all();
-    // Every event is consumed each frame, so none replays once gameplay regains input.
-    let events: Vec<_> = touch_input
-        .as_deref()
-        .map(|messages| touch_cursor.read(messages).cloned().collect())
-        .unwrap_or_default();
+    let discovery = gate.as_deref() == Some(&GameplayTouchGate::AwaitingFirstPaint);
+    let events = reader.drain(touch_input.as_deref(), discovery);
+    let Some(events) = events.filter(|_| gate.as_deref() != Some(&GameplayTouchGate::Closed)) else {
+        *touches = Touches::default();
+        state.clear();
+        world_touches.forget();
+        if let Some(mut presentation) = presentation {
+            presentation.set_touch_contacts(Vec::new());
+            presentation.close_touch_utilities();
+        }
+        return;
+    };
     let Some(mut presentation) = presentation.filter(|view| view.touch_controls_enabled()) else {
         state.clear();
         world_touches.forget();
         return;
     };
+    #[cfg(not(target_arch = "wasm32"))]
+    let menu_visible = menu.as_deref().is_some_and(MenuRuntime::is_visible);
+    #[cfg(target_arch = "wasm32")]
+    let menu_visible = false;
     let gameplay = match (player.as_deref(), windows.single()) {
         (Some(player), Ok(window)) => (window.focused
             && !ui.ui_focused(player)
-            && !menu.as_deref().is_some_and(MenuRuntime::is_visible))
+            && !menu_visible)
         .then_some(window),
         _ => None,
     };
@@ -212,7 +259,16 @@ pub(crate) fn drive_gameplay_touch_targets(
         presentation.close_touch_utilities();
         return;
     };
+    if discovery {
+        // Starts can arrive before First rotates Bevy's buffers. The next First may
+        // already discard them, so retain this admitted batch until the following Update.
+        reader.awaiting_paint = events;
+        return;
+    }
     // Panels and modals over the world own touches, so mod buttons beneath them never fire.
+    #[cfg(target_arch = "wasm32")]
+    let mod_buttons_covered = false;
+    #[cfg(not(target_arch = "wasm32"))]
     let mod_buttons_covered = client_shell::screen_policy::absorbs_input(
         &player,
         Some(&ui),
@@ -224,15 +280,15 @@ pub(crate) fn drive_gameplay_touch_targets(
         cancel_mod_button_contacts(&mut state);
     }
     let size = [window.width().max(1.0), window.height().max(1.0)];
-    let events = events
-        .iter()
-        .filter(|event| {
+    let events = events.iter();
+    #[cfg(not(target_arch = "wasm32"))]
+    let events = events.filter(|event| {
             event.phase != TouchPhase::Started
                 || !claimed
                     .as_ref()
                     .is_some_and(|claimed| claimed.0.contains(&event.id))
-        })
-        .map(|event| {
+        });
+    let events = events.map(|event| {
             let position = [
                 (event.position.x / size[0]).clamp(0.0, 1.0),
                 (event.position.y / size[1]).clamp(0.0, 1.0),
@@ -276,6 +332,7 @@ pub(crate) fn drive_gameplay_touch_targets(
                     presentation.close_touch_utilities();
                 }
                 _ => {
+                    #[cfg(not(target_arch = "wasm32"))]
                     if let Some(menu) = menu.as_mut() {
                         menu.open_pause();
                     }
