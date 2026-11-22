@@ -109,8 +109,7 @@ fn touch_center(app: &App, target: u16) -> Vec2 {
     panic!("no painted target for {target}");
 }
 
-#[test]
-fn browser_contacts_route_two_fingers_short_taps_and_reset_reused_ids() {
+fn gameplay_app() -> (App, Entity) {
     use bevy::input::touch::touch_screen_input_system;
     use semantic_controls::{
         SemanticInputRuntime, SemanticRouteState, finalize_semantic_input_after_ui_authority,
@@ -136,30 +135,44 @@ fn browser_contacts_route_two_fingers_short_taps_and_reset_reused_ids() {
         focused: true,
         ..Default::default()
     }, PrimaryWindow)).id();
-    let surface = |app: &mut App, active: bool, reset: bool| {
-        app.insert_non_send(InputSource(Box::new(move || SurfaceInputFrame {
-            device: DeviceFrame { window_focus_lost: !active || reset, ..Default::default() },
-            touch_capable: true, touch_active: active, reset_touch: reset,
-        })));
-    };
-    let send = |app: &mut App, id, phase, position| {
-        app.world_mut().write_message(TouchInput { window, id, phase, position, force: None });
-    };
-    surface(&mut app, false, false);
-    app.update();
-    assert!(!app.world().resource::<client_state::ScreenFocus>().absorbs_input);
+    (app, window)
+}
+
+fn surface(app: &mut App, capable: bool, active: bool, reset: bool) {
+    app.insert_non_send(InputSource(Box::new(move || SurfaceInputFrame {
+        device: DeviceFrame { window_focus_lost: !active || reset, ..Default::default() },
+        touch_capable: capable,
+        touch_active: active,
+        reset_touch: reset,
+    })));
+}
+
+fn send(app: &mut App, window: Entity, id: u64, phase: TouchPhase, position: Vec2) {
+    app.world_mut().write_message(TouchInput { window, id, phase, position, force: None });
+}
+
+fn paint_hud(app: &mut App) {
     app.world_mut().resource_scope(|world, mut view: Mut<UiPresentationResource>| {
         view.build(world.resource::<PlayerRuntime>(), world.resource::<UiRuntimeResource>(), 0,
             [1280, 720], ui::DpiScale::new(1.).unwrap()).unwrap();
     });
+}
+
+#[test]
+fn browser_contacts_route_two_fingers_short_taps_and_reset_reused_ids() {
+    let (mut app, window) = gameplay_app();
+    surface(&mut app, true, false, false);
+    app.update();
+    assert!(!app.world().resource::<client_state::ScreenFocus>().absorbs_input);
+    paint_hud(&mut app);
     let stick = touch_center(&app, touch::JOYSTICK);
     let jump = touch_center(&app, touch::JUMP);
     let first = touch_center(&app, touch::HOTBAR_1);
     let last = touch_center(&app, touch::HOTBAR_9);
-    surface(&mut app, true, false);
-    send(&mut app, 19, TouchPhase::Started, stick);
-    send(&mut app, 7, TouchPhase::Started, jump);
-    send(&mut app, 19, TouchPhase::Moved, stick - Vec2::Y * 60.);
+    surface(&mut app, true, true, false);
+    send(&mut app, window, 19, TouchPhase::Started, stick);
+    send(&mut app, window, 7, TouchPhase::Started, jump);
+    send(&mut app, window, 19, TouchPhase::Moved, stick - Vec2::Y * 60.);
     app.update();
     let snapshot = app.world().resource::<SemanticInputSnapshot>();
     assert!(snapshot.movement()[1] > 0.);
@@ -167,29 +180,70 @@ fn browser_contacts_route_two_fingers_short_taps_and_reset_reused_ids() {
     let targets = app.world().resource::<semantic_controls::SemanticTouchTargets>();
     assert_eq!(targets.target(19), Some(touch::JOYSTICK));
     assert_eq!(targets.target(7), Some(touch::JUMP));
-    send(&mut app, 7, TouchPhase::Canceled, jump);
+    send(&mut app, window, 7, TouchPhase::Canceled, jump);
     app.update();
     let snapshot = app.world().resource::<SemanticInputSnapshot>();
     assert!(snapshot.movement()[1] > 0.);
     assert!(!snapshot.phase(Action::Jump).held);
 
     // A backgrounded page may return with the next press queued before the reset was sampled.
-    surface(&mut app, true, true);
-    send(&mut app, 19, TouchPhase::Ended, stick);
-    send(&mut app, 19, TouchPhase::Started, jump);
+    surface(&mut app, true, true, true);
+    send(&mut app, window, 19, TouchPhase::Ended, stick);
+    send(&mut app, window, 19, TouchPhase::Started, jump);
     app.update();
     assert_eq!(app.world().resource::<Touches>().iter().count(), 0);
-    surface(&mut app, true, false);
-    send(&mut app, 19, TouchPhase::Ended, jump);
+    surface(&mut app, true, true, false);
+    send(&mut app, window, 19, TouchPhase::Ended, jump);
     app.update();
     let snapshot = app.world().resource::<SemanticInputSnapshot>();
     assert_eq!(snapshot.movement(), [0.; 2]);
     assert!(!snapshot.phase(Action::Jump).pressed);
     for (point, action, slot) in [(last, Action::Hotbar9, 8), (first, Action::Hotbar1, 0)] {
-        send(&mut app, 19, TouchPhase::Started, point);
-        send(&mut app, 19, TouchPhase::Ended, point);
+        send(&mut app, window, 19, TouchPhase::Started, point);
+        send(&mut app, window, 19, TouchPhase::Ended, point);
         app.update();
         assert!(app.world().resource::<SemanticInputSnapshot>().phase(action).pressed);
         assert_eq!(app.world().resource::<PlayerRuntime>().selected_hotbar_slot(), Some(slot));
     }
+}
+
+#[test]
+fn browser_first_frame_after_reset_accepts_a_fresh_drag_reusing_the_held_id() {
+    let (mut app, window) = gameplay_app();
+    surface(&mut app, true, false, false);
+    app.update();
+    paint_hud(&mut app);
+    let stick = touch_center(&app, touch::JOYSTICK);
+    let forward = stick - Vec2::Y * 60.0;
+    surface(&mut app, true, true, false);
+    send(&mut app, window, 19, TouchPhase::Started, stick);
+    send(&mut app, window, 19, TouchPhase::Moved, forward);
+    app.update();
+    assert!(app.world().resource::<SemanticInputSnapshot>().movement()[1] > 0.);
+    surface(&mut app, true, false, true);
+    app.update();
+    assert_eq!(app.world().resource::<SemanticInputSnapshot>().movement(), [0.; 2]);
+    surface(&mut app, true, true, false);
+    send(&mut app, window, 19, TouchPhase::Started, stick);
+    send(&mut app, window, 19, TouchPhase::Moved, forward);
+    app.update();
+    assert!(app.world().resource::<SemanticInputSnapshot>().movement()[1] > 0.);
+}
+
+#[test]
+fn browser_first_hybrid_drag_turns_after_the_first_touch_hud_paint() {
+    let (mut app, window) = gameplay_app();
+    surface(&mut app, false, false, false);
+    app.update();
+    paint_hud(&mut app);
+    let at = Vec2::new(730., 230.);
+    assert!(app.world().resource::<UiPresentationResource>()
+        .gameplay_touch_region([at.x / 1280., at.y / 720.], [1280., 720.]).is_none());
+    surface(&mut app, true, true, false);
+    send(&mut app, window, 7, TouchPhase::Started, at);
+    app.update();
+    paint_hud(&mut app);
+    send(&mut app, window, 7, TouchPhase::Moved, at + Vec2::X * 96.);
+    app.update();
+    assert!(app.world().resource::<SemanticInputSnapshot>().look_delta()[0].abs() > 0.);
 }
