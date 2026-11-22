@@ -302,7 +302,7 @@ impl Carriers {
             startup,
             canvas,
             identity,
-            Box::new(move || input.take_device()),
+            Box::new(move || input.take_surface()),
             bank,
             output,
             observer,

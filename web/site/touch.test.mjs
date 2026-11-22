@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { canvasEdges, pageLifecycle } from "./edges.mjs";
+import { bindFullscreen, canvasEdges, pageLifecycle } from "./edges.mjs";
 
 function fixture(t, primaryTouch = true) {
   const saved = [globalThis.ResizeObserver, globalThis.requestAnimationFrame];
@@ -10,6 +10,7 @@ function fixture(t, primaryTouch = true) {
   const input = {
     set_touch_capable(value) { state.capable = value; },
     begin_touch() { state.touch = true; },
+    touch_geometry_changed() { if (state.touch) this.release(); },
     focus(value) { state.mouse = value; },
     release() { state.touch = false; state.mouse = false; state.releases++; },
     key() {}, mouse() {}, motion() {},
@@ -54,6 +55,45 @@ test("a real touch enables controls on a fine-pointer hybrid device", t => {
   f.pointer("pointerdown", "touch");
   assert.equal(f.state.capable, true);
   assert.equal(f.state.touch, true);
+});
+
+test("a compatibility click after touch cannot acquire mouse lock", t => {
+  const f = fixture(t, false);
+  let nativeFocus = false;
+  f.canvas.focus = () => { nativeFocus = true; };
+  f.canvas.addEventListener("pointerdown", () => assert.equal(nativeFocus, true));
+  f.pointer("pointerdown", "touch");
+  f.canvas.dispatchEvent(new Event("click"));
+  assert.equal(f.state.locks, 0);
+  f.pointer("pointerdown", "mouse");
+  f.canvas.dispatchEvent(new Event("click"));
+  assert.equal(f.state.locks, 1);
+});
+
+test("CSS size and DPR changes retire a touch, but backing-store rewrites preserve it", t => {
+  const f = fixture(t);
+  f.pointer("pointerdown", "touch");
+  f.canvas.width = 1;
+  f.view.dispatchEvent(new Event("resize"));
+  assert.equal(f.canvas.width, 640);
+  assert.equal(f.state.touch, true);
+  f.canvas.clientHeight = 320;
+  f.view.dispatchEvent(new Event("resize"));
+  assert.equal(f.state.touch, false);
+  f.pointer("pointerdown", "touch");
+  f.view.devicePixelRatio = 3;
+  f.view.dispatchEvent(new Event("resize"));
+  assert.equal(f.state.touch, false);
+  assert.equal(f.state.releases, 2);
+});
+
+test("an already locked mouse keeps ownership when another finger lands", t => {
+  const f = fixture(t, false);
+  f.doc.pointerLockElement = f.canvas;
+  f.doc.dispatchEvent(new Event("pointerlockchange"));
+  f.pointer("pointerdown", "touch");
+  assert.equal(f.state.mouse, true);
+  assert.equal(f.state.touch, false);
 });
 
 test("mouse-lock loss does not cancel the touch that took ownership", t => {
@@ -103,4 +143,22 @@ test("cached pagehide releases touches and preserves the one game owner", t => {
   f.view.dispatchEvent(Object.assign(new Event("pagehide"), { persisted: true }));
   assert.equal(f.state.touch, false);
   assert.equal(disposed, 0);
+});
+
+test("the enabled fullscreen gesture calls the canvas synchronously and reports rejection", async () => {
+  const button = Object.assign(new EventTarget(), { disabled: true });
+  const errors = [];
+  let requests = 0;
+  const canvas = { requestFullscreen() { requests++; return Promise.reject(new Error("Denied")); } };
+  const stop = bindFullscreen(button, canvas, error => errors.push(error.message));
+  button.dispatchEvent(new Event("click"));
+  assert.equal(requests, 0);
+  button.disabled = false;
+  button.dispatchEvent(new Event("click"));
+  assert.equal(requests, 1);
+  await Promise.resolve();
+  assert.deepEqual(errors, ["Denied"]);
+  stop();
+  button.dispatchEvent(new Event("click"));
+  assert.equal(requests, 1);
 });

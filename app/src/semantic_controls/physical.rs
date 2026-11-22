@@ -312,6 +312,25 @@ fn translate_device_frame(inputs: SemanticPhysicalInputs) -> TranslatedDeviceFra
             },
         });
     }
+    let (touches, ignored_touches) = collect_touch_contacts(window, &touches, &mut touch_targets);
+    TranslatedDeviceFrame {
+        frame: DeviceFrame {
+            keyboard_mouse,
+            controllers,
+            touches,
+            ..DeviceFrame::default()
+        },
+        ignored_controllers: bounded_gamepads.ignored,
+        ignored_touches,
+    }
+}
+
+/// Collects the bounded native contacts and completed taps for a platform's device sample.
+pub(crate) fn collect_touch_contacts(
+    window: &Window,
+    touches: &Touches,
+    touch_targets: &mut SemanticTouchTargets,
+) -> (Vec<TouchContact>, usize) {
     let width = window.width().max(1.0);
     let height = window.height().max(1.0);
     let bounded_touches =
@@ -338,16 +357,7 @@ fn translate_device_frame(inputs: SemanticPhysicalInputs) -> TranslatedDeviceFra
     contacts.extend(touch_targets.take_pulses());
     let bounded_contacts =
         select_lowest_by_key(contacts, MAX_TOUCH_CONTACTS, |contact| contact.contact_id);
-    TranslatedDeviceFrame {
-        frame: DeviceFrame {
-            keyboard_mouse,
-            controllers,
-            touches: bounded_contacts.samples,
-            ..DeviceFrame::default()
-        },
-        ignored_controllers: bounded_gamepads.ignored,
-        ignored_touches: bounded_touches.ignored + bounded_contacts.ignored,
-    }
+    (bounded_contacts.samples, bounded_touches.ignored + bounded_contacts.ignored)
 }
 
 use client_shell::physical_input::{TRANSLATED_GAMEPAD_BUTTONS, keyboard_usage, mouse_button_code};

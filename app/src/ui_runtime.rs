@@ -11,7 +11,6 @@ pub(crate) mod data_driven;
 pub(crate) mod emotes;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod forms;
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) mod gameplay_touch;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) mod input_owner;

@@ -187,6 +187,22 @@ pub struct DeviceFrame {
     pub window_focus_lost: bool,
 }
 
+/// One sample from a platform surface. Touch ownership lasts until focus is released.
+#[derive(Clone, Debug, Default)]
+pub struct SurfaceInputFrame {
+    pub device: DeviceFrame,
+    pub touch_capable: bool,
+    pub touch_active: bool,
+    /// Discard contacts queued across a focus or ownership boundary.
+    pub reset_touch: bool,
+}
+
+impl From<DeviceFrame> for SurfaceInputFrame {
+    fn from(device: DeviceFrame) -> Self {
+        Self { device, ..Self::default() }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FrameError {
     TooManyControllers {

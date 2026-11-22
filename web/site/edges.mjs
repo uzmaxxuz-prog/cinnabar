@@ -82,29 +82,70 @@ export function pageLifecycle(input, audio, page, dispose, view = window) {
   view.addEventListener("pageshow", show);
 }
 
+/** Requests fullscreen on the enabled button's own activation, retaining the browser gesture. */
+export function bindFullscreen(button, canvas, onError) {
+  const enter = async () => {
+    if (button.disabled) return;
+    try {
+      await canvas.requestFullscreen();
+    } catch (error) {
+      onError(error);
+    }
+  };
+  button.addEventListener("click", enter);
+  return () => button.removeEventListener("click", enter);
+}
+
 /** Installs canvas gesture, focus and size edges, returning an explicit teardown. */
 export function canvasEdges(canvas, input, audio, view = window, doc = document) {
   const listeners = [];
   /** Registers a listener owned by this canvas session. */
-  const listen = (target, name, callback) => {
-    target.addEventListener(name, callback);
-    listeners.push(() => target.removeEventListener(name, callback));
+  const listen = (target, name, callback, capture = false) => {
+    target.addEventListener(name, callback, capture);
+    listeners.push(() => target.removeEventListener(name, callback, capture));
   };
   /** Reports whether this canvas owns pointer lock. */
   const locked = () => doc.pointerLockElement === canvas;
-  /** Updates backing pixels only when CSS size or DPR changes. */
+  let measured;
+  /** A held touch owns geometry from its starting viewport, even if Winit rewrites backing pixels. */
   const resize = () => {
     const dpr = view.devicePixelRatio || 1;
-    const width = Math.max(1, Math.round(canvas.clientWidth * dpr));
-    const height = Math.max(1, Math.round(canvas.clientHeight * dpr));
+    const cssWidth = canvas.clientWidth, cssHeight = canvas.clientHeight;
+    if (!measured || measured.cssWidth !== cssWidth || measured.cssHeight !== cssHeight || measured.dpr !== dpr) {
+      if (measured) input.touch_geometry_changed?.();
+      measured = { cssWidth, cssHeight, dpr };
+    }
+    const width = Math.max(1, Math.round(cssWidth * dpr));
+    const height = Math.max(1, Math.round(cssHeight * dpr));
     if (canvas.width !== width) canvas.width = width;
     if (canvas.height !== height) canvas.height = height;
   };
-  listen(canvas, "click", () => {
+  const primaryTouch = view.navigator?.maxTouchPoints > 0 && Boolean(view.matchMedia?.("(pointer: coarse)")?.matches);
+  input.set_touch_capable?.(primaryTouch);
+  let lastPointerType;
+  listen(canvas, "pointerdown", (event) => {
+    lastPointerType = event.pointerType;
+    if (event.pointerType !== "touch") return;
+    event.preventDefault();
+    input.set_touch_capable(true);
+    if (locked()) return;
+    canvas.focus({ preventScroll: true });
+    input.begin_touch();
+    audio.resume().catch(() => {});
+  }, true);
+  listen(canvas, "click", (event) => {
+    // Older browsers deliver a compatibility MouseEvent without pointerType.
+    if ((event.pointerType || lastPointerType) === "touch" || event.sourceCapabilities?.firesTouchEvents) return;
     audio.resume().catch(() => {});
     canvas.requestPointerLock()?.catch(() => {});
   });
-  listen(doc, "pointerlockchange", () => { input.focus?.(locked()); if (!locked()) input.release(); });
+  listen(doc, "pointerlockchange", () => {
+    if (input.focus) input.focus(locked());
+    else if (!locked()) input.release();
+  });
+  listen(doc, "visibilitychange", () => {
+    if (doc.visibilityState === "hidden") input.release();
+  });
   listen(view, "blur", () => input.release());
   for (const [name, down] of [["keydown", true], ["keyup", false]]) {
     listen(doc, name, (event) => { if (locked()) { event.preventDefault(); input.key(event.code, down); } });

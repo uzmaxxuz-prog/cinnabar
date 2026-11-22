@@ -68,6 +68,62 @@ fn utility_row_keeps_chat_between_utilities_and_pause() {
     }
 }
 
+/// A browser without screen navigation keeps gameplay controls in the actual painted overlay.
+#[test]
+fn gameplay_only_touch_keeps_joystick_jump_and_look_but_removes_screen_hits() {
+    let mut p = crate::test_support::mini_engine_presentation();
+    let runtime = UiRuntime::new(1);
+    let size = [854, 480];
+    p.enable_touch_controls(true);
+    for restricted in [false, true, false] {
+        p.set_touch_gameplay_only(restricted);
+        paint_touch(&mut p, &runtime, size);
+        let state = &p.screens.touch;
+        for frame in [state.frame.as_ref().unwrap(), state.base.as_ref().unwrap()] {
+            for id in [touch::MENU, touch::CHAT, touch::UTILITIES] {
+                assert_eq!(frame.hits.iter().any(|hit| control_id(hit.pressed.as_deref()) == Some(id)), !restricted);
+            }
+        }
+        for id in [touch::JOYSTICK, touch::JUMP] {
+            assert_eq!(hit_center(&p, id, size).hit_id, id);
+        }
+        assert_eq!(p.gameplay_touch_region([0.6, 0.3], size.map(|v| v as f32)).unwrap().hit_id, touch::LOOK_SURFACE);
+        p.toggle_touch_utilities();
+        paint_touch(&mut p, &runtime, size);
+        let frame = p.screens.touch.frame.as_ref().unwrap();
+        assert_eq!(frame.hits.iter().any(|hit| control_id(hit.pressed.as_deref()) == Some(touch::EMOTE)), !restricted);
+        p.close_touch_utilities();
+    }
+}
+
+/// The rendered HUD keeps all nine selectable cells when the inventory button is hidden.
+#[test]
+fn gameplay_only_touch_retains_hotbar_cells_and_hides_inventory() {
+    let mut p = crate::test_support::touch_hud_presentation();
+    let mut player = player_state::PlayerState::new(1);
+    player.inventory.set_local_selected_slot(0);
+    let runtime = pack_harness::menu_runtime();
+    let size = [1280, 720];
+    let window = size.map(|v| v as f32);
+    p.enable_touch_controls(true);
+    for restricted in [false, true, false] {
+        p.set_touch_gameplay_only(restricted);
+        paint(&mut p, &player, &runtime, size);
+        let frame = p.screens.touch.hud.as_ref().unwrap();
+        assert_eq!(frame.hits.iter().any(|hit| hit.pressed.as_deref() == Some("button.hotbar_inventory_button")), !restricted);
+        for slot in 0..9 {
+            let hit = frame.hits.iter().find(|hit| {
+                hit.collection.as_deref() == Some("hotbar_items") && hit.collection_index == Some(slot)
+            }).unwrap();
+            let center = [
+                (frame.origin[0] + (hit.rect.x + hit.rect.w / 2.) as f32 * frame.scale) / window[0],
+                (frame.origin[1] + (hit.rect.y + hit.rect.h / 2.) as f32 * frame.scale) / window[1],
+            ];
+            assert_eq!(p.gameplay_touch_region(center, window).unwrap().hit_id, touch::HOTBAR_1 + slot as u16);
+        }
+    }
+}
+
 /// Changing touch enablement refreshes retained HUD bindings and removes obsolete geometry.
 #[test]
 fn inventory_access_tracks_the_painted_hotbar_and_touch_enablement() {
