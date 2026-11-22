@@ -155,7 +155,7 @@ pub(in crate::chunk) fn install(app: &mut App) {
         adapter.get_downlevel_capabilities().flags,
         device.features(),
         Backends::from(info.backend),
-        device.is_webgpu_compatibility() || direct_draws_required(&info),
+        direct_draws_required(&info),
     );
     let submission = gpu_cull_submission(
         draw_mode,
