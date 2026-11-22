@@ -547,7 +547,7 @@ fn raster_batch_in_scene(
                 }
                 wgpu::BindingResource::TextureView(view) => wgpu::BindingType::Texture {
                     sample_type: if entry.binding == 22 {
-                        wgpu::TextureSampleType::Depth
+                        wgpu::TextureSampleType::Float { filterable: false }
                     } else {
                         wgpu::TextureSampleType::Float { filterable: true }
                     },

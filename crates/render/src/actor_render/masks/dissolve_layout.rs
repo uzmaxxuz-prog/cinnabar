@@ -15,7 +15,7 @@ pub(crate) fn dissolve_layout(multisampled: bool, compatibility: bool) -> BindGr
         binding: 0,
         visibility: ShaderStages::FRAGMENT,
         ty: BindingType::Texture {
-            sample_type: TextureSampleType::Depth,
+            sample_type: TextureSampleType::Float { filterable: false },
             view_dimension: TextureViewDimension::D2,
             multisampled: multisampled && !compatibility,
         },

@@ -486,6 +486,16 @@ fn layout_binding(entry: &BindGroupLayoutEntry) -> Value {
             "viewDimension": "d2",
             "multisampled": multisampled,
         }),
+        BindingType::Texture {
+            sample_type: TextureSampleType::Float { filterable: false },
+            view_dimension: TextureViewDimension::D2,
+            multisampled,
+        } => json!({
+            "kind": "floatTexture",
+            "sampleType": "unfilterable-float",
+            "viewDimension": "d2",
+            "multisampled": multisampled,
+        }),
         BindingType::Sampler(SamplerBindingType::NonFiltering) => {
             json!({"kind": "sampler", "sampler": "nonFiltering"})
         }
@@ -681,7 +691,7 @@ fn assert_dissolve_group(
     multisampled: bool,
     compatibility: bool,
 ) {
-    let mut expected = vec![(0_u64, "depthTexture".to_owned(), "fragment".to_owned())];
+    let mut expected = vec![(0_u64, "floatTexture".to_owned(), "fragment".to_owned())];
     if compatibility {
         expected.push((1, "sampler".to_owned(), "fragment".to_owned()));
     }
@@ -691,6 +701,7 @@ fn assert_dissolve_group(
         "{entry}: described dissolve group differs from the production descriptor"
     );
     let depth = described_binding(group, entry, 0);
+    assert_eq!(depth["sampleType"], "unfilterable-float");
     assert_eq!(
         depth["viewDimension"].as_str(),
         Some("d2"),
@@ -724,7 +735,7 @@ fn assert_shadow_group(
 ) {
     let mut expected: Vec<(u64, String, String)> = vec![
         (0, "uniformBuffer".to_owned(), "fragment+vertex".to_owned()),
-        (1, "depthTexture".to_owned(), "fragment".to_owned()),
+        (1, "floatTexture".to_owned(), "fragment".to_owned()),
         (3, "storageBuffer".to_owned(), "fragment+vertex".to_owned()),
         (4, "uniformBuffer".to_owned(), "fragment+vertex".to_owned()),
     ];
@@ -737,6 +748,7 @@ fn assert_shadow_group(
         "{entry}: described shadow group differs from the production descriptor"
     );
     let depth = described_binding(group, entry, 1);
+    assert_eq!(depth["sampleType"], "unfilterable-float");
     assert_eq!(
         depth["viewDimension"].as_str(),
         Some("d2"),

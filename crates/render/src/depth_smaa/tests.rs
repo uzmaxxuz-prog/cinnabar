@@ -89,7 +89,10 @@ fn depth_smaa_edge_shader_reads_only_depth_for_both_sample_modes() {
         assert!(matches!(
             module.types[variable.ty].inner,
             naga::TypeInner::Image {
-                class: naga::ImageClass::Depth { .. },
+                class: naga::ImageClass::Sampled {
+                    kind: naga::ScalarKind::Float,
+                    ..
+                },
                 ..
             }
         ));

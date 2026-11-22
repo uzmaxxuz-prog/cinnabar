@@ -5,7 +5,7 @@ struct Exposure {
 }
 @group(0) @binding(0) var scene: texture_2d<f32>;
 @group(0) @binding(1) var scene_sampler: sampler;
-@group(0) @binding(2) var depth: texture_depth_2d;
+@group(0) @binding(2) var depth: texture_2d<f32>;
 @group(0) @binding(3) var<uniform> exposure: Exposure;
 @group(0) @binding(4) var actor_velocity: texture_2d<f32>;
 
@@ -35,12 +35,12 @@ fn actor_velocity_pixels(motion: vec4<f32>) -> vec2<f32> {
 
 // The nearest reverse-Z surface owns occlusion, including partially covered MSAA pixels.
 fn source_scene_depth(pixel: vec2<i32>) -> f32 {
-    return textureLoad(depth, pixel, 0);
+    return textureLoad(depth, pixel, 0).x;
 }
 
 // Only covered samples provide an actor's depth; neighbouring foreground samples do not.
 fn source_actor_depth(pixel: vec2<i32>) -> f32 {
-    let covered_depth = textureLoad(depth, pixel, 0);
+    let covered_depth = textureLoad(depth, pixel, 0).x;
     return covered_depth;
 }
 
