@@ -1,7 +1,7 @@
 @if(MULTISAMPLED)
-@group(0) @binding(0) var scene_depth: texture_depth_multisampled_2d;
+@group(0) @binding(0) var scene_depth: texture_multisampled_2d<f32>;
 @if(!MULTISAMPLED)
-@group(0) @binding(0) var scene_depth: texture_depth_2d;
+@group(0) @binding(0) var scene_depth: texture_2d<f32>;
 
 // A full-screen triangle avoids a diagonal seam between primitives.
 @vertex
@@ -17,12 +17,12 @@ fn depth_at(pixel: vec2<i32>) -> f32 {
     var depth = 0.0;
     @if(MULTISAMPLED)
     for (var sample = 0u; sample < textureNumSamples(scene_depth); sample++) {
-        depth = max(depth, textureLoad(scene_depth, point, i32(sample)));
+        depth = max(depth, textureLoad(scene_depth, point, i32(sample)).x);
     }
     @if(MULTISAMPLED)
     return depth;
     @if(!MULTISAMPLED)
-    return textureLoad(scene_depth, point, 0);
+    return textureLoad(scene_depth, point, 0).x;
 }
 
 // Depth jumps mark silhouettes; continuous slopes cannot smear authored texture edges.

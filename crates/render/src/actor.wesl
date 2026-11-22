@@ -435,9 +435,9 @@ fn actor_fragment(stage: StageOutput, @builtin(front_facing) front: bool) -> @lo
 }
 
 @if(MASK_DISSOLVE && (!MASK_DISSOLVE_MSAA || WEBGPU_COMPATIBILITY))
-@group(3) @binding(0) var mask_dissolve_depth: texture_depth_2d;
+@group(3) @binding(0) var mask_dissolve_depth: texture_2d<f32>;
 @if(MASK_DISSOLVE_MSAA && !WEBGPU_COMPATIBILITY)
-@group(3) @binding(0) var mask_dissolve_depth: texture_depth_multisampled_2d;
+@group(3) @binding(0) var mask_dissolve_depth: texture_multisampled_2d<f32>;
 
 @if(MASK_DISSOLVE && WEBGPU_COMPATIBILITY)
 @group(3) @binding(1) var mask_dissolve_sampler: sampler;
@@ -450,11 +450,11 @@ fn actor_mask_fragment(stage: StageOutput, @builtin(front_facing) front: bool,
     // The scene's function owns every material rejection and multisample cutout footprint.
     let colour = actor_colour(input, front);
     @if(MASK_DISSOLVE && !MASK_DISSOLVE_MSAA && !WEBGPU_COMPATIBILITY)
-    let companion_depth = textureLoad(mask_dissolve_depth, vec2<i32>(input.position.xy), 0);
+    let companion_depth = textureLoad(mask_dissolve_depth, vec2<i32>(input.position.xy), 0).x;
     @if(MASK_DISSOLVE_MSAA && !WEBGPU_COMPATIBILITY)
-    let companion_depth = textureLoad(mask_dissolve_depth, vec2<i32>(input.position.xy), i32(sample_index));
+    let companion_depth = textureLoad(mask_dissolve_depth, vec2<i32>(input.position.xy), i32(sample_index)).x;
     @if(MASK_DISSOLVE && WEBGPU_COMPATIBILITY)
-    let companion_depth = textureSampleLevel(mask_dissolve_depth, mask_dissolve_sampler, input.position.xy / vec2<f32>(textureDimensions(mask_dissolve_depth)), 0u);
+    let companion_depth = textureSampleLevel(mask_dissolve_depth, mask_dissolve_sampler, input.position.xy / vec2<f32>(textureDimensions(mask_dissolve_depth)), 0u).x;
     @if(MASK_DISSOLVE)
     if (companion_depth == 0.0 || input.position.z != companion_depth) { discard; }
     @if(MASK_BLEND)

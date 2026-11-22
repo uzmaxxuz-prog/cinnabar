@@ -8,21 +8,24 @@ pub(super) fn source(raw: &str, multisampled: bool) -> String {
     let source = raw.replace("MOTION_TILE_SIZE", &TILE_SIZE.to_string());
     if multisampled {
         source
-            .replace("texture_depth_2d", "texture_depth_multisampled_2d")
             .replace(
-                "let covered_depth = textureLoad(depth, pixel, 0);",
+                "var depth: texture_2d<f32>",
+                "var depth: texture_multisampled_2d<f32>",
+            )
+            .replace(
+                "let covered_depth = textureLoad(depth, pixel, 0).x;",
                 r#"var covered_depth = 0.0;
     for (var sample = 0u; sample < textureNumSamples(depth); sample++) {
         if textureLoad(actor_velocity, pixel, i32(sample)).z >= 0.5 {
-            covered_depth = max(covered_depth, textureLoad(depth, pixel, i32(sample)));
+            covered_depth = max(covered_depth, textureLoad(depth, pixel, i32(sample)).x);
         }
     }"#,
             )
             .replace(
-                "return textureLoad(depth, pixel, 0);",
+                "return textureLoad(depth, pixel, 0).x;",
                 r#"var nearest = 0.0;
     for (var sample = 0u; sample < textureNumSamples(depth); sample++) {
-        nearest = max(nearest, textureLoad(depth, pixel, i32(sample)));
+        nearest = max(nearest, textureLoad(depth, pixel, i32(sample)).x);
     }
     return nearest;"#,
             )

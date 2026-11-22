@@ -11,9 +11,9 @@ struct ShadowParams {
 
 @group(0) @binding(0) var<uniform> view: View;
 @if(MULTISAMPLED && !WEBGPU_COMPATIBILITY)
-@group(0) @binding(1) var scene_depth: texture_depth_multisampled_2d;
+@group(0) @binding(1) var scene_depth: texture_multisampled_2d<f32>;
 @if(!MULTISAMPLED || WEBGPU_COMPATIBILITY)
-@group(0) @binding(1) var scene_depth: texture_depth_2d;
+@group(0) @binding(1) var scene_depth: texture_2d<f32>;
 @if(WEBGPU_COMPATIBILITY)
 @group(0) @binding(2) var depth_sampler: sampler;
 // Feet in xyz, radius in w.
@@ -64,11 +64,11 @@ fn shadow_fragment(in: VertexOutput,
 ) -> @location(0) vec4<f32> {
     let pixel = vec2<i32>(floor(in.position.xy));
     @if(MULTISAMPLED && !WEBGPU_COMPATIBILITY)
-    let depth = textureLoad(scene_depth, pixel, i32(sample));
+    let depth = textureLoad(scene_depth, pixel, i32(sample)).x;
     @if(!MULTISAMPLED && !WEBGPU_COMPATIBILITY)
-    let depth = textureLoad(scene_depth, pixel, 0);
+    let depth = textureLoad(scene_depth, pixel, 0).x;
     @if(WEBGPU_COMPATIBILITY)
-    let depth = textureSampleLevel(scene_depth, depth_sampler, in.position.xy / vec2<f32>(textureDimensions(scene_depth)), 0u);
+    let depth = textureSampleLevel(scene_depth, depth_sampler, in.position.xy / vec2<f32>(textureDimensions(scene_depth)), 0u).x;
     // Reverse depth: zero is the sky.
     if depth <= 0.0 {
         discard;

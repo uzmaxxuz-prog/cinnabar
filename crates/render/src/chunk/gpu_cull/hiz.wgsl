@@ -4,8 +4,8 @@
 // written: the cull never reads the rest, and reads clamp to the source's covered extent, so a
 // trailing texel takes the farthest depth of the edge pixels it reaches.
 
-@group(0) @binding(0) var depth_single: texture_depth_2d;
-@group(0) @binding(1) var depth_multi: texture_depth_multisampled_2d;
+@group(0) @binding(0) var depth_single: texture_2d<f32>;
+@group(0) @binding(1) var depth_multi: texture_multisampled_2d<f32>;
 @group(0) @binding(2) var previous: texture_2d<f32>;
 @group(0) @binding(3) var destination: texture_storage_2d<r32float, write>;
 
@@ -24,7 +24,7 @@ fn hiz_seed(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
     var farthest = 1.0;
     for (var offset = 0u; offset < 4u; offset++) {
-        farthest = min(farthest, textureLoad(depth_single, source_texel(gid.xy * 2u, offset), 0));
+        farthest = min(farthest, textureLoad(depth_single, source_texel(gid.xy * 2u, offset), 0).x);
     }
     textureStore(destination, gid.xy, vec4(farthest));
 }
@@ -39,7 +39,7 @@ fn hiz_seed_multisampled(@builtin(global_invocation_id) gid: vec3<u32>) {
     for (var offset = 0u; offset < 4u; offset++) {
         let texel = source_texel(gid.xy * 2u, offset);
         for (var sample = 0u; sample < samples; sample++) {
-            farthest = min(farthest, textureLoad(depth_multi, texel, i32(sample)));
+            farthest = min(farthest, textureLoad(depth_multi, texel, i32(sample)).x);
         }
     }
     textureStore(destination, gid.xy, vec4(farthest));

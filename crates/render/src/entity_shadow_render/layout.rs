@@ -35,7 +35,7 @@ pub(crate) fn shadow_layout(multisampled: bool, compatibility: bool) -> BindGrou
             1,
             fragment,
             BindingType::Texture {
-                sample_type: TextureSampleType::Depth,
+                sample_type: TextureSampleType::Float { filterable: false },
                 view_dimension: TextureViewDimension::D2,
                 multisampled: multisampled && !compatibility,
             },

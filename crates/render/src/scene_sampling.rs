@@ -14,6 +14,8 @@ use render_scene::RuntimeStage;
 pub(crate) mod tests;
 
 /// Reuses the cached view for depth-only textures; combined formats need a depth-aspect view.
+/// Numeric depth consumers bind these views as unfilterable float textures and read `.x`: this
+/// preserves depth values while allowing texture loads in WebGPU compatibility mode.
 pub(crate) fn view_depth(depth: &ViewDepthStencilTexture) -> &TextureView {
     let format = depth.texture().format();
     if format.has_depth_aspect() && !format.has_stencil_aspect() {
