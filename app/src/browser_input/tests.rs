@@ -13,6 +13,7 @@ fn canvas_app() -> App {
         .init_resource::<GameplayTouchGate>()
         .init_resource::<Touches>()
         .init_resource::<semantic_controls::SemanticTouchTargets>()
+        .init_resource::<semantic_controls::SemanticInputRuntime>()
         .init_resource::<semantic_controls::PendingDeviceFrame>()
         .init_resource::<client_state::GameplayScreenControls>()
         .init_resource::<client_state::ScreenFocus>()
@@ -112,7 +113,7 @@ fn touch_center(app: &App, target: u16) -> Vec2 {
 fn gameplay_app() -> (App, Entity) {
     use bevy::input::touch::touch_screen_input_system;
     use semantic_controls::{
-        SemanticInputRuntime, SemanticRouteState, finalize_semantic_input_after_ui_authority,
+        SemanticRouteState, finalize_semantic_input_after_ui_authority,
         route_semantic_input, synchronize_semantic_input_authority,
     };
     let mut app = canvas_app();
@@ -120,7 +121,6 @@ fn gameplay_app() -> (App, Entity) {
     player.inventory.set_local_selected_slot(0);
     player.facts.publish_player_game_mode(protocol::PlayerGameMode::Survival);
     app.insert_resource(player)
-        .init_resource::<SemanticInputRuntime>()
         .init_resource::<SemanticRouteState>()
         .init_resource::<client_state::RuntimeSettings>()
         .add_message::<TouchInput>()
@@ -246,4 +246,83 @@ fn browser_first_hybrid_drag_turns_after_the_first_touch_hud_paint() {
     send(&mut app, window, 7, TouchPhase::Moved, at + Vec2::X * 96.);
     app.update();
     assert!(app.world().resource::<SemanticInputSnapshot>().look_delta()[0].abs() > 0.);
+}
+
+#[test]
+fn browser_deferred_hybrid_start_is_discarded_by_cancel_or_reset() {
+    use crate::camera::freeform_pick::FreeformPickPoint;
+    for reset in [false, true] {
+        let (mut app, window) = gameplay_app();
+        app.init_resource::<FreeformPickPoint>();
+        let at = Vec2::new(730., 230.);
+        surface(&mut app, false, false, false);
+        app.update();
+        paint_hud(&mut app);
+        surface(&mut app, true, true, false);
+        send(&mut app, window, 7, TouchPhase::Started, at);
+        app.update();
+        paint_hud(&mut app);
+        if reset {
+            surface(&mut app, true, true, true);
+        } else {
+            send(&mut app, window, 7, TouchPhase::Canceled, at);
+        }
+        app.update();
+        surface(&mut app, true, true, false);
+        send(&mut app, window, 7, TouchPhase::Moved, at + Vec2::X * 96.);
+        send(&mut app, window, 7, TouchPhase::Ended, at + Vec2::X * 96.);
+        for _ in 0..4 {
+            app.update();
+            let snapshot = app.world().resource::<SemanticInputSnapshot>();
+            assert_eq!(snapshot.look_delta(), [0.; 2], "reset={reset}");
+            assert!(!snapshot.phase(Action::Use).pressed && !snapshot.phase(Action::Attack).pressed);
+            assert_eq!(app.world().resource::<FreeformPickPoint>().0, None);
+        }
+    }
+}
+
+#[test]
+fn browser_mouse_lock_hides_touch_controls_on_the_neutral_transition_frame() {
+    let (mut app, _) = gameplay_app();
+    surface(&mut app, true, true, false);
+    app.update();
+    assert!(app.world().resource::<UiPresentationResource>().touch_controls_enabled());
+    app.insert_non_send(InputSource(Box::new(|| SurfaceInputFrame {
+        device: DeviceFrame::default(),
+        touch_capable: true,
+        touch_active: false,
+        reset_touch: true,
+    })));
+    app.update();
+    assert!(!app.world().resource::<UiPresentationResource>().touch_controls_enabled());
+    assert_eq!(app.world().resource::<SemanticInputSnapshot>().movement(), [0.; 2]);
+}
+
+#[test]
+fn browser_draining_touch_keeps_desktop_focus_quarantine() {
+    let (mut app, _) = gameplay_app();
+    let desktop = |app: &mut App, held: bool| {
+        app.insert_non_send(InputSource(Box::new(move || DeviceFrame {
+            keyboard_mouse: Some(semantic_input::KeyboardMouseFrame {
+                keys: if held { vec![semantic_input::KeyboardKey::KeyW.usage().unwrap()] } else { Vec::new() },
+                ..Default::default()
+            }),
+            ..Default::default()
+        }.into())));
+    };
+    desktop(&mut app, false);
+    app.update();
+    desktop(&mut app, true);
+    app.update();
+    assert!(app.world().resource::<SemanticInputSnapshot>().movement()[1] > 0.);
+    surface(&mut app, false, false, true);
+    app.update();
+    desktop(&mut app, true);
+    app.update();
+    assert_eq!(app.world().resource::<SemanticInputSnapshot>().movement(), [0.; 2]);
+    desktop(&mut app, false);
+    app.update();
+    desktop(&mut app, true);
+    app.update();
+    assert!(app.world().resource::<SemanticInputSnapshot>().movement()[1] > 0.);
 }

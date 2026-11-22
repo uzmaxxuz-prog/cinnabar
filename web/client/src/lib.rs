@@ -155,7 +155,11 @@ impl BrowserInput {
 impl BrowserInput {
     /// Consumes the canvas sample at the game's raw-input boundary.
     pub fn take_device(&mut self) -> semantic_input::DeviceFrame {
-        self.take_surface().device
+        let surface = self.take_surface();
+        if surface.reset_touch {
+            return semantic_input::DeviceFrame { window_focus_lost: true, ..Default::default() };
+        }
+        surface.device
     }
     /// Consumes a focus reset once, even if a gesture has already restored ownership.
     pub fn take_surface(&mut self) -> semantic_input::SurfaceInputFrame {
@@ -168,7 +172,8 @@ impl BrowserInput {
         semantic_input::SurfaceInputFrame {
             device: semantic_input::DeviceFrame {
                 keyboard_mouse: (state.mouse_captured && !reset_touch).then_some(keyboard),
-                window_focus_lost: reset_touch || !(state.mouse_captured || state.touch_active),
+                // A captured mouse still owns the canvas during the neutral reset frame.
+                window_focus_lost: !state.mouse_captured && (!state.touch_active || reset_touch),
                 ..Default::default()
             },
             touch_capable: state.touch_capable,
@@ -287,7 +292,9 @@ mod tests {
         let resumed = input.take_surface();
         assert!(resumed.touch_active && !resumed.reset_touch && !resumed.device.window_focus_lost);
         input.focus(true);
-        assert!(input.take_surface().reset_touch);
+        let switching = input.take_surface();
+        assert!(switching.reset_touch && !switching.touch_active);
+        assert!(!switching.device.window_focus_lost && switching.device.keyboard_mouse.is_none());
         let mouse = input.take_surface();
         assert!(mouse.touch_capable && !mouse.touch_active && mouse.device.keyboard_mouse.is_some());
         input.focus(false);

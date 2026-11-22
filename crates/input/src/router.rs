@@ -178,6 +178,17 @@ impl SemanticInputRouter {
         Ok(())
     }
 
+    /// The platform drained its touch stream. Later starts can reuse any of these IDs.
+    /// Keep other device families quarantined across the accompanying focus loss.
+    pub fn retire_touch_contacts(&mut self) {
+        self.previous_frame.touches.clear();
+        if let Some(frame) = &mut self.pending {
+            frame.touches.clear();
+        }
+        self.quarantined_controls
+            .retain(|control| !matches!(control, QuarantinedControl::TouchContact(_)));
+    }
+
     pub fn release_all(&mut self, reason: ReleaseReason) {
         self.queue_held_releases(reason);
     }

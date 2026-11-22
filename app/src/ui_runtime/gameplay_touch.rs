@@ -134,8 +134,14 @@ fn apply_touch_events(
 }
 
 /// Installed by hosts that must admit canvas ownership separately from window focus.
-#[derive(Resource, Default)]
-pub(crate) struct GameplayTouchGate(pub(crate) bool);
+#[derive(Resource, Default, Clone, Copy, Eq, PartialEq)]
+pub(crate) enum GameplayTouchGate {
+    #[default]
+    Closed,
+    /// The discovery press arrived before the newly enabled HUD could paint its targets.
+    AwaitingFirstPaint,
+    Open,
+}
 
 /// What world touches read and publish.
 #[derive(SystemParam)]
@@ -192,12 +198,15 @@ pub(crate) fn drive_gameplay_touch_targets(
     mut world_touches: WorldTouchContext,
 ) {
     targets.release_all();
-    // Every event is consumed each frame, so none replays once gameplay regains input.
+    // Bevy retains the previous update's native batch. Save only its cursor when the
+    // discovery gesture arrives before the HUD paint, preserving order without another queue.
+    let discovery = (gate.as_deref() == Some(&GameplayTouchGate::AwaitingFirstPaint))
+        .then(|| (*touch_cursor).clone());
     let events: Vec<_> = touch_input
         .as_deref()
         .map(|messages| touch_cursor.read(messages).cloned().collect())
         .unwrap_or_default();
-    if gate.is_some_and(|gate| !gate.0) {
+    if gate.as_deref() == Some(&GameplayTouchGate::Closed) {
         *touches = Touches::default();
         state.clear();
         world_touches.forget();
@@ -230,6 +239,11 @@ pub(crate) fn drive_gameplay_touch_targets(
         presentation.close_touch_utilities();
         return;
     };
+    if let Some(before_discovery) = discovery {
+        // Restore only an admitted gameplay batch. Every rejection above drained it.
+        *touch_cursor = before_discovery;
+        return;
+    }
     // Panels and modals over the world own touches, so mod buttons beneath them never fire.
     #[cfg(target_arch = "wasm32")]
     let mod_buttons_covered = false;

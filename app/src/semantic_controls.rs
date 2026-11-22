@@ -117,6 +117,12 @@ impl SemanticInputRuntime {
         self.router.consume_control(control);
     }
 
+    /// Forgets the physical contact generation after the platform has drained its stream.
+    pub(crate) fn retire_touch_contacts(&mut self) {
+        self.previous.touches.clear();
+        self.router.retire_touch_contacts();
+    }
+
     pub fn release_all(&mut self, reason: ReleaseReason) {
         bevy::log::info!("held inputs released: {reason:?}");
         self.router.release_all(reason);

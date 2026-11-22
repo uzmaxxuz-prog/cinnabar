@@ -35,14 +35,22 @@ pub(crate) fn prepare_canvas_input(
     world: Res<world::ClientWorld>,
 ) {
     let surface = (source.0)();
-    let mouse = !surface.device.window_focus_lost && !surface.touch_active && !surface.reset_touch;
+    let mouse = !surface.touch_active && !surface.device.window_focus_lost;
     let touch_hud = surface.touch_capable && !mouse;
+    let enabling_hud = touch_hud && !presentation.touch_controls_enabled();
     presentation.set_touch_gameplay_only(true);
     presentation.enable_touch_controls(touch_hud);
-    gate.0 = touch_hud && surface.touch_active && !surface.reset_touch
-        && !surface.device.window_focus_lost && world.stream.is_some()
-        && presentation.loading_stage().is_none();
-    if !mouse {
+    *gate = if !touch_hud || !surface.touch_active || surface.reset_touch
+        || surface.device.window_focus_lost || world.stream.is_none()
+        || presentation.loading_stage().is_some()
+    {
+        GameplayTouchGate::Closed
+    } else if enabling_hud {
+        GameplayTouchGate::AwaitingFirstPaint
+    } else {
+        GameplayTouchGate::Open
+    };
+    if !mouse || surface.reset_touch {
         scroll.delta = Vec2::ZERO;
     }
     // Establish gameplay authority before the first finger lands. The gate still owns admission.
@@ -76,6 +84,7 @@ pub(crate) struct CanvasTouchInputs<'w, 's> {
     windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
     touches: Res<'w, Touches>,
     targets: ResMut<'w, semantic_controls::SemanticTouchTargets>,
+    runtime: ResMut<'w, semantic_controls::SemanticInputRuntime>,
 }
 
 /// Merges the native contact stream into the staged browser sample.
@@ -89,9 +98,14 @@ pub(crate) fn sample_input(
 ) {
     let surface = std::mem::take(&mut capture.surface);
     let mut frame = surface.device;
-    if surface.reset_touch || world.stream.is_none() || (surface.touch_active && !touch.gate.0) {
+    if surface.reset_touch {
+        touch.runtime.retire_touch_contacts();
+    }
+    if surface.reset_touch || world.stream.is_none()
+        || (surface.touch_active && *touch.gate == GameplayTouchGate::Closed)
+    {
         frame = semantic_input::DeviceFrame { window_focus_lost: true, ..Default::default() };
-    } else if touch.gate.0 && let Ok(window) = touch.windows.single() {
+    } else if *touch.gate == GameplayTouchGate::Open && let Ok(window) = touch.windows.single() {
         (frame.touches, _) = semantic_controls::physical::collect_touch_contacts(
             window, &touch.touches, &mut touch.targets,
         );
