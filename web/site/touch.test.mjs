@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { bindFullscreen, canvasEdges, pageLifecycle } from "./edges.mjs";
 
-function fixture(t, primaryTouch = true) {
+function fixture(t, { coarsePointer = true, maxTouchPoints = 5 } = {}) {
   const saved = [globalThis.ResizeObserver, globalThis.requestAnimationFrame];
   globalThis.ResizeObserver = class { observe() {} disconnect() {} };
   globalThis.requestAnimationFrame = () => 1;
@@ -17,8 +17,8 @@ function fixture(t, primaryTouch = true) {
   };
   const view = Object.assign(new EventTarget(), {
     devicePixelRatio: 2,
-    navigator: { maxTouchPoints: primaryTouch ? 5 : 0 },
-    matchMedia: () => ({ matches: primaryTouch }),
+    navigator: { maxTouchPoints },
+    matchMedia: () => ({ matches: coarsePointer }),
   });
   const doc = Object.assign(new EventTarget(), { visibilityState: "visible", pointerLockElement: null });
   const canvas = Object.assign(new EventTarget(), {
@@ -51,14 +51,15 @@ test("touch owns the canvas without requesting mouse lock", t => {
 });
 
 test("a real touch enables controls on a fine-pointer hybrid device", t => {
-  const f = fixture(t, false);
+  const f = fixture(t, { coarsePointer: false, maxTouchPoints: 5 });
+  assert.equal(f.state.capable, false);
   f.pointer("pointerdown", "touch");
   assert.equal(f.state.capable, true);
   assert.equal(f.state.touch, true);
 });
 
 test("a compatibility click after touch cannot acquire mouse lock", t => {
-  const f = fixture(t, false);
+  const f = fixture(t, { coarsePointer: false, maxTouchPoints: 0 });
   let nativeFocus = false;
   f.canvas.focus = () => { nativeFocus = true; };
   f.canvas.addEventListener("pointerdown", () => assert.equal(nativeFocus, true));
@@ -88,7 +89,7 @@ test("CSS size and DPR changes retire a touch, but backing-store rewrites preser
 });
 
 test("an already locked mouse keeps ownership when another finger lands", t => {
-  const f = fixture(t, false);
+  const f = fixture(t, { coarsePointer: false, maxTouchPoints: 0 });
   f.doc.pointerLockElement = f.canvas;
   f.doc.dispatchEvent(new Event("pointerlockchange"));
   f.pointer("pointerdown", "touch");
@@ -126,7 +127,7 @@ test("cancelled contact remains in the native stream without releasing another f
 });
 
 test("desktop mouse keeps its existing pointer-lock gesture", t => {
-  const f = fixture(t, false);
+  const f = fixture(t, { coarsePointer: false, maxTouchPoints: 0 });
   f.pointer("pointerdown", "mouse");
   f.pointer("click", "mouse");
   assert.equal(f.state.locks, 1);
