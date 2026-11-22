@@ -146,7 +146,9 @@ pub(in crate::chunk) fn install(app: &mut App) {
     let unstable = gpu_cull_unstable(info.vendor);
     let forced_cpu = cpu_culling_required(
         info.vendor,
-        env_compat::var_os(CPU_CULLING_ENV).is_some_and(|value| value != "0"),
+        // Compatibility disallows sampling and writing different pyramid mip views together.
+        device.is_webgpu_compatibility()
+            || env_compat::var_os(CPU_CULLING_ENV).is_some_and(|value| value != "0"),
         &device.limits(),
     );
     let draw_mode = select_chunk_draw_mode(
