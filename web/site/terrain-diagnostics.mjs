@@ -67,10 +67,10 @@ export function installTerrainDiagnostics(env = globalThis) {
       });
     }
   }
-  for (const kind of ["error", "warn", "info"]) {
+  for (const kind of ["error", "warn", "info", "log"]) {
     wrap(env.console, kind, (_self, args) => {
-      const text = args.filter(value => typeof value === "string").join(" ");
-      if (kind === "error" || /terrain|chunk|pipeline|GPU|renderer/i.test(text)) note(kind, text);
+      const text = args.filter(value => typeof value === "string").join(" ").replaceAll("%c", "");
+      if (kind === "error" || /\b(?:ERROR|WARN)\b|terrain|chunk|pipeline|GPU|renderer/i.test(text)) note(kind, text);
     });
   }
   for (const name of ["error", "unhandledrejection"]) {
