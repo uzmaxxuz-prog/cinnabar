@@ -35,7 +35,6 @@ export function installTerrainDiagnostics(env = globalThis) {
         core: device.features.has("core-features-and-limits"),
         indirect_first_instance: device.features.has("indirect-first-instance"),
         limits: Object.fromEntries(["maxTextureArrayLayers", "maxBufferSize", "maxStorageBufferBindingSize"].map(key => [key, device.limits[key]])),
-        _device: device,
       };
       const error = event => note("gpu", event.error?.message || "GPU validation error");
       device.addEventListener("uncapturederror", error);
@@ -80,53 +79,25 @@ export function installTerrainDiagnostics(env = globalThis) {
     undo.push(() => env.removeEventListener(name, listener));
   }
 
-  function publicDeviceInfo() {
-    if (!deviceInfo) return null;
-    const { _device, ...rest } = deviceInfo;
-    return rest;
-  }
-
   async function canvasHistogram() {
     const canvas = env.document?.getElementById("game");
-    if (!canvas || !deviceInfo?._device) return null;
+    if (!canvas) return null;
     try {
-      const device = deviceInfo._device;
-      const ctx = canvas.getContext("webgpu");
-      if (!ctx) return "webgpu-context-missing";
-      const sourceTexture = ctx.getCurrentTexture();
-      if (!sourceTexture) return "no-current-texture";
-      const width = Math.min(canvas.width, 64);
-      const height = Math.min(canvas.height, 64);
-      const texture = device.createTexture({
-        label: "diagnostic histogram",
-        size: { width, height, depthOrArrayLayers: 1 },
-        format: "rgba8unorm",
-        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
-      });
-      const encoder = device.createCommandEncoder({ label: "diagnostic histogram" });
-      encoder.copyTextureToTexture(
-        { texture: sourceTexture },
-        { texture },
-        { width, height, depthOrArrayLayers: 1 }
-      );
-      const bytesPerRow = width * 4;
-      const buffer = device.createBuffer({
-        label: "diagnostic histogram readback",
-        size: bytesPerRow * height,
-        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-      });
-      encoder.copyTextureToBuffer(
-        { texture },
-        { buffer, bytesPerRow, rowsPerImage: height },
-        { width, height, depthOrArrayLayers: 1 }
-      );
-      device.queue.submit([encoder.finish()]);
-      await buffer.mapAsync(GPUMapMode.READ);
-      const data = new Uint8Array(buffer.getMappedRange());
-      const summary = summarizeHistogram(data, width, height);
-      buffer.unmap();
-      buffer.destroy();
-      texture.destroy();
+      // Prefer the standard canvas snapshot path; WebGPU canvases support toDataURL in Chrome,
+      // and this avoids swapchain/present-layout timing issues with copyTextureToTexture.
+      const dataUrl = canvas.toDataURL("image/png");
+      const blob = await (await fetch(dataUrl)).blob();
+      const bitmap = await env.createImageBitmap(blob);
+      const width = Math.min(bitmap.width, 64);
+      const height = Math.min(bitmap.height, 64);
+      const scratch = new env.OffscreenCanvas(width, height);
+      const ctx = scratch.getContext("2d");
+      if (!ctx) return "offscreen-2d-unavailable";
+      ctx.drawImage(bitmap, 0, 0);
+      const imageData = ctx.getImageData(0, 0, width, height);
+      const summary = summarizeHistogram(imageData.data, width, height);
+      bitmap.close();
+      scratch.width = 0;
       return summary;
     } catch (err) {
       return String(err?.message || err);
@@ -163,7 +134,7 @@ export function installTerrainDiagnostics(env = globalThis) {
       return JSON.parse(JSON.stringify({
         version: 1, release: env.location.pathname.match(/\/releases\/([0-9a-f]{64})/)?.[1] || null,
         elapsed_seconds: Math.round((env.performance.now() - started) / 1000),
-        browser: scrub(env.navigator.userAgent), device: publicDeviceInfo(),
+        browser: scrub(env.navigator.userAgent), device: deviceInfo,
         status: scrub(env.document?.getElementById("status")?.textContent || ""),
         canvas: canvas ? { width: canvas.width, height: canvas.height, css_width: canvas.clientWidth, css_height: canvas.clientHeight, dpr: env.devicePixelRatio } : null,
         histogram: null,
