@@ -11,9 +11,16 @@ function fixture() {
   class Pass {
     setPipeline(pipeline) { this.pipeline = pipeline; }
     drawIndexed(...args) { this.args = args; return 17; }
+    setViewport(...args) { this.viewport = args; }
+    setScissorRect(...args) { this.scissor = args; }
+  }
+  class Encoder {
+    copyBufferToBuffer(...args) { this.args = args; return 13; }
+    beginRenderPass(descriptor) { this.descriptor = descriptor; return new Pass(); }
   }
   return {
     GPUDevice: Device, GPUQueue: Queue, GPURenderPassEncoder: Pass,
+    GPUCommandEncoder: Encoder,
     console: { error() {}, warn() {}, info() {}, log() {} },
     navigator: { userAgent: "test" }, location: { pathname: "/releases/test/index.html", search: "" },
     performance: { now: () => 100 }, addEventListener() {}, removeEventListener() {},
@@ -69,5 +76,26 @@ test("Rust tracing errors through console.log reach the report without unrelated
   const report = diagnostic.snapshot();
   assert.ok(report.messages.some(message => message.text.includes("shader creation failed")));
   assert.ok(!JSON.stringify(report).includes("ordinary account message"));
+  diagnostic.restore();
+});
+
+test("report distinguishes copy calls and actual draw arguments without changing them", () => {
+  const env = fixture(), diagnostic = installTerrainDiagnostics(env);
+  const device = new env.GPUDevice(), encoder = new env.GPUCommandEncoder();
+  const source = { label: "staging" }, target = device.createBuffer({ label: "packed chunk quads", size: 4096 });
+  assert.equal(encoder.copyBufferToBuffer(source, 8, target, 16, 64), 13);
+  assert.deepEqual(encoder.args, [source, 8, target, 16, 64]);
+  const pass = encoder.beginRenderPass({ label: "terrain pass", depthStencilAttachment: { depthLoadOp: "clear", depthClearValue: 0 } });
+  pass.setPipeline(device.createRenderPipeline({ label: "terrain opaque", depthStencil: { depthCompare: "greater-equal" } }));
+  pass.setViewport(0, 0, 320, 200, 0, 1);
+  pass.setScissorRect(0, 0, 320, 200);
+  assert.equal(pass.drawIndexed(384, 3, 0, 0, 0), 17);
+  const report = diagnostic.snapshot();
+  assert.deepEqual(report.copies["packed chunk quads"], { calls: 1, bytes: 64 });
+  const draw = report.last_draws["terrain opaque:drawIndexed"];
+  assert.deepEqual(draw.args, [384, 3, 0, 0, 0]);
+  assert.deepEqual(draw.viewport, [0, 0, 320, 200, 0, 1]);
+  assert.equal(draw.pass.depth_clear, 0);
+  assert.equal(draw.pipeline.depth_compare, "greater-equal");
   diagnostic.restore();
 });
