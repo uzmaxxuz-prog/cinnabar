@@ -35,6 +35,7 @@ export function installTerrainDiagnostics(env = globalThis) {
         core: device.features.has("core-features-and-limits"),
         indirect_first_instance: device.features.has("indirect-first-instance"),
         limits: Object.fromEntries(["maxTextureArrayLayers", "maxBufferSize", "maxStorageBufferBindingSize"].map(key => [key, device.limits[key]])),
+        _device: device,
       };
       const error = event => note("gpu", event.error?.message || "GPU validation error");
       device.addEventListener("uncapturederror", error);
@@ -78,17 +79,101 @@ export function installTerrainDiagnostics(env = globalThis) {
     env.addEventListener(name, listener);
     undo.push(() => env.removeEventListener(name, listener));
   }
+
+  function publicDeviceInfo() {
+    if (!deviceInfo) return null;
+    const { _device, ...rest } = deviceInfo;
+    return rest;
+  }
+
+  async function canvasHistogram() {
+    const canvas = env.document?.getElementById("game");
+    if (!canvas || !deviceInfo?._device) return null;
+    try {
+      const device = deviceInfo._device;
+      const ctx = canvas.getContext("webgpu");
+      if (!ctx) return "webgpu-context-missing";
+      const sourceTexture = ctx.getCurrentTexture();
+      if (!sourceTexture) return "no-current-texture";
+      const width = Math.min(canvas.width, 64);
+      const height = Math.min(canvas.height, 64);
+      const texture = device.createTexture({
+        label: "diagnostic histogram",
+        size: { width, height, depthOrArrayLayers: 1 },
+        format: "rgba8unorm",
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+      });
+      const encoder = device.createCommandEncoder({ label: "diagnostic histogram" });
+      encoder.copyTextureToTexture(
+        { texture: sourceTexture },
+        { texture },
+        { width, height, depthOrArrayLayers: 1 }
+      );
+      const bytesPerRow = width * 4;
+      const buffer = device.createBuffer({
+        label: "diagnostic histogram readback",
+        size: bytesPerRow * height,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      });
+      encoder.copyTextureToBuffer(
+        { texture },
+        { buffer, bytesPerRow, rowsPerImage: height },
+        { width, height, depthOrArrayLayers: 1 }
+      );
+      device.queue.submit([encoder.finish()]);
+      await buffer.mapAsync(GPUMapMode.READ);
+      const data = new Uint8Array(buffer.getMappedRange());
+      const summary = summarizeHistogram(data, width, height);
+      buffer.unmap();
+      buffer.destroy();
+      texture.destroy();
+      return summary;
+    } catch (err) {
+      return String(err?.message || err);
+    }
+  }
+
+  function summarizeHistogram(data, width, height) {
+    if (!data || data.length === 0) return null;
+    const buckets = { dark: 0, green: 0, blue: 0, bright: 0, other: 0 };
+    for (let y = 0; y < height; ++y) {
+      const row = y * width * 4;
+      for (let x = 0; x < width; ++x) {
+        const i = row + x * 4;
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        if (g > 60 && g > r * 1.2 && g > b * 1.2) buckets.green++;
+        else if (b > 60 && b > r * 1.2 && b > g * 2.0) buckets.blue++;
+        else if (r + g + b < 60) buckets.dark++;
+        else if (r + g + b > 500) buckets.bright++;
+        else buckets.other++;
+      }
+    }
+    const total = width * height;
+    return {
+      sample_px: { width, height },
+      total_pixels: total,
+      buckets,
+      dominant: Object.entries(buckets).sort((a, b) => b[1] - a[1])[0][0],
+    };
+  }
+
   return {
     snapshot() {
       const canvas = env.document?.getElementById("game");
       return JSON.parse(JSON.stringify({
         version: 1, release: env.location.pathname.match(/\/releases\/([0-9a-f]{64})/)?.[1] || null,
         elapsed_seconds: Math.round((env.performance.now() - started) / 1000),
-        browser: scrub(env.navigator.userAgent), device: deviceInfo,
+        browser: scrub(env.navigator.userAgent), device: publicDeviceInfo(),
         status: scrub(env.document?.getElementById("status")?.textContent || ""),
         canvas: canvas ? { width: canvas.width, height: canvas.height, css_width: canvas.clientWidth, css_height: canvas.clientHeight, dpr: env.devicePixelRatio } : null,
+        histogram: null,
         buffers, draws, messages,
       }));
+    },
+    async fullReport() {
+      const [base, histogram] = await Promise.all([this.snapshot(), canvasHistogram()]);
+      base.histogram = histogram;
+      return base;
     },
     restore() { restored = true; undo.reverse().forEach(remove => remove()); },
   };
@@ -105,7 +190,7 @@ export function mountTerrainDiagnostics(env = globalThis) {
   output.readOnly = true; output.rows = 12; output.style.width = "100%";
   output.setAttribute("aria-label", "Диагностический отчёт");
   button.addEventListener("click", async () => {
-    output.value = JSON.stringify(diagnostic.snapshot());
+    output.value = JSON.stringify(await diagnostic.fullReport());
     try {
       await env.navigator.clipboard.writeText(output.value);
       result.textContent = "Отчёт скопирован. Вставьте его в чат.";
