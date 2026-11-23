@@ -14,7 +14,7 @@ function fixture() {
   }
   return {
     GPUDevice: Device, GPUQueue: Queue, GPURenderPassEncoder: Pass,
-    console: { error() {}, warn() {}, info() {} },
+    console: { error() {}, warn() {}, info() {}, log() {} },
     navigator: { userAgent: "test" }, location: { pathname: "/releases/test/index.html", search: "" },
     performance: { now: () => 100 }, addEventListener() {}, removeEventListener() {},
   };
@@ -59,5 +59,15 @@ test("diagnostics preserve original GPU exceptions", () => {
   env.GPUDevice.prototype.createBuffer = () => { throw expected; };
   const diagnostic = installTerrainDiagnostics(env);
   assert.throws(() => new env.GPUDevice().createBuffer({}), error => error === expected);
+  diagnostic.restore();
+});
+
+test("Rust tracing errors through console.log reach the report without unrelated logs", () => {
+  const env = fixture(), diagnostic = installTerrainDiagnostics(env);
+  env.console.log("ordinary account message");
+  env.console.log("%cERROR%c shader creation failed", "color:red", "color:inherit");
+  const report = diagnostic.snapshot();
+  assert.ok(report.messages.some(message => message.text.includes("shader creation failed")));
+  assert.ok(!JSON.stringify(report).includes("ordinary account message"));
   diagnostic.restore();
 });
