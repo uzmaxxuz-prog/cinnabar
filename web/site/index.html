@@ -29,6 +29,8 @@ import init, { Page, Carriers, BrowserInput, SoundSource, sound_bank_filename, s
 import { boundedBytes, downloadCarriers, bindFullscreen, canvasEdges, pageLifecycle } from "./edges.mjs";
 import { openSoundBank } from "./audio.mjs";
 import { checkWebGpu, credentialsFor, extractReleaseId } from "./webgpu.mjs";
+import { mountTerrainDiagnostics } from "./terrain-diagnostics.mjs";
+mountTerrainDiagnostics();
 /** Finds a page control by its stable DOM identifier. */
 const element = (id) => document.getElementById(id);
 const status = element("status");
